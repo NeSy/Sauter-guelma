@@ -49,3 +49,6 @@ Source vérifiée : HobenCore de MyHOBEN 2.2, StoveFactory.Create associe type 5
 
 ## V0.7.4 — dérogations H5 expérimentales
 Le relevé réel de V0.7.3 est confirmé sur H5 type 5, révision 0, logiciel 8.2. Les méthodes StoveV4 ActivateDerogation/DeactivateDerogation utilisent fonction 16, transaction 65520, enveloppe 13, registres 1281–1283 (température en dixièmes, départ en minutes, durée en minutes) et 1282–1283 à zéro pour l'annulation. Activation immédiate limitée aux favoris 15–25 °C et 15–480 min, après confirmation, appairage mémorisé et lecture fraîche sans défaut ni absence/arrêt externe/hors gel. Pas de remplacement automatique d'une dérogation existante, ni mise en marche forcée. Vérification de l'accusé et relecture bornée, sans renvoi d'ordre. En cas d'incertitude, actualiser avant de commander. Widget 1×1 ouvre la confirmation, pas de commande silencieuse. Test matériel nécessaire. Correction des libellés d'états selon EOperationState.
+
+## V0.7.5 — icônes Hoben carrées
+Widget 1×1 : fond extérieur transparent, icône centrée de 44 × 44 dp, coins arrondis de 9 dp. La grille du lanceur peut rester rectangulaire mais le fond coloré ne s'étire plus. Les associations de favoris et le parcours de confirmation sont inchangés.

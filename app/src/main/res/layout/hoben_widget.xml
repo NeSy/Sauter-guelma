@@ -1,9 +1,22 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/hoben_widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:gravity="center" android:padding="3dp" android:background="@drawable/hoben_widget_background"
-    android:contentDescription="Favori Hoben, ouvrir le détail">
-    <TextView android:id="@+id/hoben_widget_value" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:gravity="center" android:includeFontPadding="false" android:maxLines="1" android:text="22°" android:textColor="#FFF1E5" android:textStyle="bold" android:textSize="19sp"/>
-    <TextView android:id="@+id/hoben_widget_duration" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:gravity="center" android:includeFontPadding="false" android:maxLines="1" android:text="2h" android:textColor="#FFC28C" android:textSize="12sp"/>
-</LinearLayout>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+    <LinearLayout
+        android:id="@+id/hoben_widget_root"
+        android:layout_width="44dp" android:layout_height="44dp"
+        android:layout_gravity="center" android:gravity="center"
+        android:orientation="vertical" android:padding="2dp"
+        android:background="@drawable/hoben_widget_background"
+        android:contentDescription="Favori Hoben, ouvrir le détail">
+        <TextView android:id="@+id/hoben_widget_value"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center" android:includeFontPadding="false"
+            android:maxLines="1" android:text="22°" android:textColor="#FFF1E5"
+            android:textStyle="bold" android:textSize="16sp"/>
+        <TextView android:id="@+id/hoben_widget_duration"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center" android:includeFontPadding="false"
+            android:maxLines="1" android:text="2h" android:textColor="#FFC28C"
+            android:textSize="11sp"/>
+    </LinearLayout>
+</FrameLayout>
