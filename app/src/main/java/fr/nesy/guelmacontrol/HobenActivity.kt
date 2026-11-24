@@ -130,8 +130,31 @@ private fun HobenView(initial:String?,back:()->Unit){
     var busy by remember{mutableStateOf(false)}
     var status by remember{mutableStateOf("Non testé")}
     var snapshot by remember{mutableStateOf<HobenSnapshot?>(null)}
+    var commandBusy by remember{mutableStateOf(false)}
+    var pairBusy by remember{mutableStateOf(false)}
+    var commandStatus by remember{mutableStateOf("")}
+    var uncertain by remember{mutableStateOf(false)}
+    var cancelConfirm by remember{mutableStateOf(false)}
     val scope=rememberCoroutineScope()
     val flame=Color(0xFFE58A43)
+    val savedPairing=CredentialVault(c,"hoben").hasCredentials()
+    val canCommand=savedPairing&&!commandBusy&&!pairBusy&&!uncertain
+    fun execute(order:HobenOverride){
+        if(!canCommand)return
+        commandBusy=true;details=null;cancelConfirm=false;commandStatus="Vérification du poêle…";snapshot=null
+        scope.launch{
+            try{
+                val result=withContext(Dispatchers.IO){HobenOverrideGateway.execute(c,order)}
+                snapshot=(result as? HobenPairResult.Opened)?.state
+                commandStatus=when(result){
+                    is HobenPairResult.Opened->result.readStatus
+                    HobenPairResult.PinRequired->"Autorisation nécessaire. Refaire la connexion avant toute commande."
+                    is HobenPairResult.Failed->result.message
+                }
+                uncertain=(result is HobenPairResult.Opened&&result.state==null)
+            }finally{commandBusy=false}
+        }
+    }
     Scaffold(containerColor=MaterialTheme.colorScheme.background){padding->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
             TextButton(onClick=back){Text("‹  Eau chaude")}
@@ -142,11 +165,11 @@ private fun HobenView(initial:String?,back:()->Unit){
                     val reading=snapshot
                     if(reading==null){
                         Text("En attente d’une lecture",color=Color.White,style=MaterialTheme.typography.titleLarge)
-                        Text("Connectez votre poêle ci-dessous. Favoris locaux, commandes verrouillées.",color=Color(0xFFF3DCCB),style=MaterialTheme.typography.bodyMedium)
+                        Text("Connectez votre poêle ci-dessous. Une lecture fraîche est effectuée avant chaque commande.",color=Color(0xFFF3DCCB),style=MaterialTheme.typography.bodyMedium)
                     }else{
                         Text(reading.ambient?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—",color=Color.White,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.Bold)
                         Text("Température ambiante · consigne "+(reading.target?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—"),color=Color(0xFFF3DCCB))
-                        Text(reading.stateLabel+" · "+reading.modeLabel,color=Color(0xFFF3DCCB))
+                        Text(reading.stateLabel+" · "+reading.modeLabel+" · "+(if(reading.onOff==1)"Marche autorisée"else if(reading.onOff==0)"Arrêt demandé"else "Marche/arrêt non reconnu"),color=Color(0xFFF3DCCB))
                         Text("Puissance "+(reading.power?.let{"$it %"}?:"—")+" · Ventilation "+reading.ventLabel,color=Color(0xFFF3DCCB))
                         Text(if(reading.activeOverride)"Dérogation active"else if(reading.scheduledOverride)"Dérogation programmée"else "Pas de dérogation signalée",color=Color(0xFFF3DCCB))
                         if(reading.activeOverride||reading.scheduledOverride)Text("Dérogation : "+(reading.overrideTemp?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—")+" · durée remontée "+reading.overrideMinutes+" min",color=Color(0xFFF3DCCB))
@@ -155,6 +178,8 @@ private fun HobenView(initial:String?,back:()->Unit){
                     }
                 }
             }
+            if(commandStatus.isNotBlank()) Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp)){Text(commandStatus);if(commandBusy)LinearProgressIndicator(Modifier.fillMaxWidth());if(uncertain)Text("Relisez le poêle avant toute nouvelle commande.")} }
+            if(snapshot?.let{it.activeOverride||it.scheduledOverride}==true)OutlinedButton(onClick={cancelConfirm=true},enabled=canCommand,modifier=Modifier.fillMaxWidth()){Text("Annuler la dérogation")}
             Row(verticalAlignment=Alignment.CenterVertically){
                 Text("Mes favoris",Modifier.weight(1f),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
                 TextButton(onClick={editing=HobenFavorite(UUID.randomUUID().toString(),"",44,120)}){Text("+ Ajouter")}
@@ -175,11 +200,11 @@ private fun HobenView(initial:String?,back:()->Unit){
                 }
             }
             if(list.isEmpty())Text("Ajoutez votre première dérogation favorite.")
-            HobenPairingPanel{snapshot=it}
+            HobenPairingPanel(commandBusy,{pairBusy=it}){snapshot=it;if(it!=null)uncertain=false}
             Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text("Widgets Android · 1 × 1",style=MaterialTheme.typography.titleMedium)
-                    Text("Ajoutez plusieurs widgets depuis le sélecteur Android, puis choisissez un favori par widget. Un appui ouvre le favori ; le pilotage reste verrouillé. Le favori étoilé est le choix par défaut.")
+                    Text("Ajoutez plusieurs widgets depuis le sélecteur Android, puis choisissez un favori par widget. Un appui ouvre le favori ; confirmez pour envoyer la dérogation. Le favori étoilé est le choix par défaut.")
                     val manager=AppWidgetManager.getInstance(c)
                     Button(onClick={manager.requestPinAppWidget(ComponentName(c,HobenWidget::class.java),null,null)},enabled=manager.isRequestPinAppWidgetSupported&&list.isNotEmpty()){Text("Ajouter le widget")}
                 }
@@ -199,13 +224,16 @@ private fun HobenView(initial:String?,back:()->Unit){
         AlertDialog(onDismissRequest={details=null},title={Text(f.name)},text={
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text(f.temperature+" · "+f.duration,style=MaterialTheme.typography.headlineSmall)
-                Text("Activation verrouillée : la communication avec le H5 n’est pas encore validée.")
+                Text("Dérogation immédiate, puis retour au programme du poêle. Aucun changement de programmation.")
+                if(!savedPairing)Text("Mémorisez d’abord l’appairage dans Connexion au H5.")
+                if(uncertain)Text("Relisez le poêle avant de commander.")
                 OutlinedButton(onClick={HobenFavorites.select(c,f.id);selected=f.id;details=null}){Text("Choisir par défaut")}
                 TextButton(onClick={details=null;editing=f}){Text("Modifier")}
                 TextButton(onClick={details=null;remove=f}){Text("Supprimer")}
             }
-        },confirmButton={TextButton(onClick={details=null}){Text("Fermer")}})
+        },confirmButton={Button(onClick={execute(HobenOverride.Start(f.halfDegrees,f.minutes))},enabled=canCommand){Text("Activer")}},dismissButton={TextButton(onClick={details=null}){Text("Fermer")}})
     }
+    if(cancelConfirm)AlertDialog(onDismissRequest={cancelConfirm=false},title={Text("Reprendre le programme habituel ?")},text={Text("Annuler la dérogation active ou programmée du poêle.")},confirmButton={Button(onClick={execute(HobenOverride.Cancel)},enabled=canCommand){Text("Confirmer")}},dismissButton={TextButton(onClick={cancelConfirm=false}){Text("Retour")}})
     editing?.let{f->
         var name by remember(f.id){mutableStateOf(f.name)}
         var temp by remember(f.id){mutableStateOf(f.halfDegrees)}

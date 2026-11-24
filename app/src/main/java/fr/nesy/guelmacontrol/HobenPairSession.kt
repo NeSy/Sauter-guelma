@@ -38,7 +38,7 @@ internal class HobenPairSession(context:Context):AutoCloseable {
     private var challengeTime=0L
     fun hasSaved()=vault.hasCredentials()
     fun forget(){close();vault.clear()}
-    @Synchronized fun open(raw:String?,remember:Boolean):HobenPairResult {
+    @Synchronized fun open(raw:String?,remember:Boolean,command:HobenOverride?=null):HobenPairResult {
         close()
         val saved=vault.load()
         val id=if(raw==null)saved?.first else normalizeHobenId(raw)
@@ -61,8 +61,8 @@ internal class HobenPairSession(context:Context):AutoCloseable {
                 userId=id
                 val frame=hobenOpenFrame(id,deviceId,"Android/Home Energy Control/Phone/Android/1/0/0/1/0/0,0")
                 tls.outputStream.write(frame);tls.outputStream.flush()
-                val result=readReply(remember)
-                if(result==HobenPairResult.PinRequired)challengeTime=android.os.SystemClock.elapsedRealtime()
+                val result=readReply(remember,command)
+                if(result==HobenPairResult.PinRequired && command==null)challengeTime=android.os.SystemClock.elapsedRealtime()
                 else close()
                 result
             } catch(e:Exception){tcp.close();throw e}
@@ -79,7 +79,7 @@ internal class HobenPairSession(context:Context):AutoCloseable {
             if(result==HobenPairResult.PinRequired)HobenPairResult.Failed("Nouvelle demande d’autorisation. Relancez la connexion.")else result
         }catch(e:Exception){failure(e)}finally{close()}
     }
-    private fun readReply(remember:Boolean):HobenPairResult {
+    private fun readReply(remember:Boolean,command:HobenOverride?=null):HobenPairResult {
         val input=DataInputStream(socket!!.inputStream)
         return when(val header=input.readUnsignedByte()){
             47 -> HobenPairResult.PinRequired
@@ -101,12 +101,16 @@ internal class HobenPairSession(context:Context):AutoCloseable {
                 if(guid==null||id==null)return HobenPairResult.Failed("Réponse d’identification incomplète ou non reconnue.")
                 if(remember)vault.save(id,guid)
                 val identity=HobenIdentity(unsigned(8),unsigned(7),unsigned(10),unsigned(9))
-                if(identity.type!=5||identity.revision!=0||identity.major!=8) {
+                if(identity.type!=5||identity.revision!=0||identity.major!=8||(command!=null&&identity.minor!=2)) {
                     HobenPairResult.Opened(identity,readStatus="Variante non validée pour la lecture.")
                 }else{
                     try {
                         val snapshot=readHobenSnapshot(socket!!,input)
-                        HobenPairResult.Opened(identity,snapshot,"Lecture réussie.")
+                        if(command==null)HobenPairResult.Opened(identity,snapshot,"Lecture réussie.")
+                        else {
+                            val outcome=applyHobenOverride(socket!!,input,snapshot,command)
+                            HobenPairResult.Opened(identity,outcome.snapshot,outcome.message)
+                        }
                     } catch(e:Exception){
                         HobenPairResult.Opened(identity,readStatus=when(e){
                             is java.net.SocketTimeoutException->"Délai de lecture dépassé."

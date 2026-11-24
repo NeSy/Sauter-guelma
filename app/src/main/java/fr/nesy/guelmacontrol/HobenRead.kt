@@ -9,10 +9,10 @@ internal data class HobenSnapshot(
     val ambient:Double?, val target:Double?, val power:Int?, val mode:Int,
     val state:Int,val vent:Int,val onOff:Int,val activeOverride:Boolean,
     val scheduledOverride:Boolean,val overrideTemp:Double?,val overrideMinutes:Int,
-    val delayMinutes:Int,val faults:Int,val timestamp:Long
+    val delayMinutes:Int,val faults:Int,val timestamp:Long,val info:Int=0
 ){
     val modeLabel:String get()=when(mode){0->"Habitation";1->"Magasin";2->"Manuel";else->"Mode non reconnu ($mode)"}
-    val stateLabel:String get()=when(state){0->"Arrêt";1->"Fin de combustion";2->"Démarrage";3->"Redémarrage après coupure";4->"Stabilisation";5->"Gestion combustion";else->"État non reconnu ($state)"}
+    val stateLabel:String get()=when(state){0->"En attente";1->"Arrêt";2->"Démarrage";3->"Stabilisation";4->"Modulation";5->"Fin de combustion";6->"Démarrage standard";7->"Redémarrage après coupure";8->"Gestion combustion";else->"État non reconnu ($state)"}
     val ventLabel:String get()=when(vent){0->"Normal";1->"Silence";2->"Boost";else->"Non reconnue ($vent)"}
 }
 // Fixed allowlisted input-register read; no generic register/write API.
@@ -26,7 +26,7 @@ internal fun decodeHobenV4(registers:IntArray,now:Long):HobenSnapshot{
         temp(7),temp(8),(registers[6] ushr 8).takeIf{it in 0..100},
         registers[0] ushr 8,registers[6] and 255,registers[4] and 255,
         registers[0] and 255,(info and 32)!=0,(info and 64)!=0,
-        temp(1),registers[3],registers[2],registers[5],now
+        temp(1),registers[3],registers[2],registers[5],now,info
     )
 }
 internal fun decodeHobenReadPdu(pdu:ByteArray,now:Long):HobenSnapshot{
