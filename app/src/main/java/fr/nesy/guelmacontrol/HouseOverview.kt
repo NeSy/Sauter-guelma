@@ -16,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private fun timeText(t:Long)=if(t>0)DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(t))else "Aucun relevé"
+private fun timeText(t:Long)=if(t>0)DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(t))else "Aucun relevé"
 private fun heatTemp(t:Double?)=t?.let{String.format(Locale.FRANCE,"%.1f °C",it)}?:"—"
 
 @Composable
@@ -51,7 +51,7 @@ internal fun HouseOverview(model:DiagnosticModel,heater:Device?,openWater:()->Un
             Text(if(s!=null)"Consigne "+heatTemp(s.target)+" · "+s.stateLabel else if(saved)"En attente de lecture"else "Connecter le poêle",color=Color(0xFFF3DCCB))
             if(s!=null){
                 Text("Puissance "+(s.power?.let{"$it %"}?:"—")+" · "+s.ventLabel,color=Color(0xFFF3DCCB))
-                Text(if(s.activeOverride)"Dérogation active · "+heatTemp(s.overrideTemp)else if(s.scheduledOverride)"Dérogation programmée"else "Programme habituel",color=Color(0xFFFFC28C))
+                Text(if(s.activeOverride)"Dérogation active · "+heatTemp(s.overrideTemp)else if(s.scheduledOverride)"Dérogation programmée"else s.modeLabel+" · "+if(s.onOff==1)"Marche autorisée"else "Arrêt demandé",color=Color(0xFFFFC28C))
                 if(s.faults!=0)Text("Défaut signalé",color=Color(0xFFFFC28C))
                 Text("Relevé "+timeText(s.timestamp),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelMedium)
             }

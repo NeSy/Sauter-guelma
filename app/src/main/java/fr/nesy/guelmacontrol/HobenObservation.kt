@@ -35,6 +35,7 @@ internal class HobenHistoryStore(private val c:Context):SQLiteOpenHelper(c,"hobe
         db.insertWithOnConflict("measures",null,v,SQLiteDatabase.CONFLICT_IGNORE)!=-1L
     }
     fun recent(key:String,days:Int):List<HobenMeasure> = synchronized(lock){
+        writableDatabase.delete("measures","time<?",arrayOf((System.currentTimeMillis()-90L*86400000).toString()))
         if(key.isEmpty())return@synchronized emptyList()
         readableDatabase.rawQuery("SELECT time,ambient,target,power,state,override_active FROM measures WHERE device=? AND time>=? ORDER BY time",arrayOf(key,(System.currentTimeMillis()-days*86400000L).toString())).use{r->
             buildList{while(r.moveToNext())add(HobenMeasure(r.getLong(0),if(r.isNull(1))null else r.getDouble(1),if(r.isNull(2))null else r.getDouble(2),if(r.isNull(3))null else r.getInt(3),r.getInt(4),r.getInt(5)==1))}

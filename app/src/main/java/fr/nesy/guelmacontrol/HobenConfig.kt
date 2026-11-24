@@ -62,6 +62,7 @@ internal fun applyHobenConfig(s:SSLSocket,i:DataInputStream,before:HobenSnapshot
     if(before.faults!=0||before.mode !in listOf(0,2)||before.activeOverride||before.scheduledOverride)return blocked("État incompatible avec la configuration.")
     try{
         val cfg=regs(s,i,1536,7,111)
+        if(order is HobenOverride.Schedule&&cfg[6] and 1!=0)return blocked("Mode vacances actif : terminez les vacances avant de modifier le programme.")
         val readBack:(List<Int>)->Boolean
         val pdu:List<Byte>
         when(order){

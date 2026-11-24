@@ -192,7 +192,7 @@ private fun HobenView(initial:String?,back:()->Unit){
                         Text(if(reading.activeOverride)"Dérogation active"else if(reading.scheduledOverride)"Dérogation programmée"else "Pas de dérogation signalée",color=Color(0xFFF3DCCB))
                         if(reading.activeOverride||reading.scheduledOverride)Text("Dérogation : "+(reading.overrideTemp?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—")+" · durée remontée "+reading.overrideMinutes+" min",color=Color(0xFFF3DCCB))
                         if(reading.faults!=0)Text("Défaut signalé : consultez MyHOBEN ou le poêle.",color=Color(0xFFFFC28C))
-                        Text("Dernier relevé à "+java.text.DateFormat.getTimeInstance().format(java.util.Date(reading.timestamp)),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelSmall)
+                        Text("Dernier relevé : "+java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT).format(java.util.Date(reading.timestamp)),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelSmall)
                     }
                 }
             }

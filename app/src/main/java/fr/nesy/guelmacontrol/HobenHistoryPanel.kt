@@ -1,6 +1,8 @@
 package fr.nesy.guelmacontrol
 
 import androidx.compose.foundation.Canvas
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,6 +47,11 @@ internal fun HobenHistoryPanel(enabled:Boolean,setEnabled:(Boolean)->Unit,auto:B
     var log by remember{mutableStateOf(emptyList<String>())}
     var confirm by remember{mutableStateOf(false)}
     var reload by remember{mutableStateOf(0)}
+    var exportStatus by remember{mutableStateOf("")}
+    var exportRows by remember{mutableStateOf<List<HobenMeasure>>(emptyList())}
+    val export=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")){uri->
+        if(uri!=null){val data=exportRows;scope.launch{exportStatus=withContext(Dispatchers.IO){try{c.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use{it.write(hobenCsv(data))}?:error("No stream");"Export terminé."}catch(_:Exception){"Export impossible."}}}};exportRows=emptyList()
+    }
     LaunchedEffect(expanded,days,stamp,reload,saved){
         if(expanded)while(true){
             rows=withContext(Dispatchers.IO){runCatching{HobenObservation.rows(c,days)}.getOrDefault(emptyList())}
@@ -58,6 +65,7 @@ internal fun HobenHistoryPanel(enabled:Boolean,setEnabled:(Boolean)->Unit,auto:B
             Row(verticalAlignment=Alignment.CenterVertically){Text("Actualisation à l’écran · 2 min",Modifier.weight(1f));Switch(checked=auto,onCheckedChange=setAuto)}
             Row(verticalAlignment=Alignment.CenterVertically){Text("Observation en arrière-plan",Modifier.weight(1f));Switch(checked=enabled,onCheckedChange=setEnabled,enabled=saved)}
             Text("Collecte facultative toutes les 30 min environ, selon Android. Données locales, 90 jours. Aucun ordre automatique.",style=MaterialTheme.typography.bodySmall)
+            HobenPredictionPanel(saved,stamp,reload)
             OutlinedButton(onClick={expanded=!expanded}){Text(if(expanded)"Masquer l’historique"else "Afficher l’historique")}
             if(expanded){
                 Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){listOf(1,7,30,90).forEach{d->FilterChip(selected=days==d,onClick={days=d},label={Text("${d}j")})}}
@@ -83,6 +91,8 @@ internal fun HobenHistoryPanel(enabled:Boolean,setEnabled:(Boolean)->Unit,auto:B
                     Text(stats.cooling?.let{String.format(java.util.Locale.FRANCE,"Refroidissement observé médian : %.2f °C/h",it)}?:"Refroidissement : données encore insuffisantes")
                     Text("Estimations ponctuelles, pas de durée de combustion ni de consommation de granulés mesurée.",style=MaterialTheme.typography.bodySmall)
                 }else Text("Activez l’observation pour construire l’historique.")
+                OutlinedButton(onClick={exportRows=rows.toList();export.launch("hoben-${days}j.csv")},enabled=rows.isNotEmpty()){Text("Exporter les relevés CSV")}
+                if(exportStatus.isNotBlank())Text(exportStatus)
                 Text("Journal Hoben · ${log.size} événements",style=MaterialTheme.typography.titleMedium)
                 OutlinedButton(onClick={clipboard.setText(AnnotatedString(log.joinToString("\n")))},enabled=log.isNotEmpty()){Text("Copier le journal")}
                 log.take(10).forEach{Text(it,style=MaterialTheme.typography.bodySmall)}

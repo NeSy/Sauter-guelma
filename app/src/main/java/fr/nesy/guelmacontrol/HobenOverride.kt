@@ -41,6 +41,7 @@ internal fun hobenOverrideBlock(s:HobenSnapshot,order:HobenOverride):String?{
     if(order is HobenOverride.Power&&!order.on)return if(s.onOff==0)"Arrêt déjà demandé."else if(s.onOff!=1)"État marche/arrêt inconnu."else null
     if(order==HobenOverride.Cancel)return if(!s.activeOverride&&!s.scheduledOverride)"Aucune dérogation à annuler."else null
     if(order is HobenOverride.Power&&s.onOff==1)return "Marche déjà autorisée."
+    if(order is HobenOverride.Mode&&s.mode==order.mode)return "Mode déjà sélectionné."
     if(s.onOff!=1&&order !is HobenOverride.Power)return "Poêle non autorisé à chauffer. Vérifiez MyHOBEN."
     if(order is HobenOverride.Start&&s.mode!=0)return "Activation limitée au mode Habitation."
     if(s.mode !in listOf(0,2))return "Mode non compatible."
