@@ -140,7 +140,7 @@ private fun HobenView(initial:String?,back:()->Unit){
             list.chunked(2).forEach{pair->
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                     pair.forEach{f->
-                        Card(Modifier.weight(1f),shape=RoundedCornerShape(20.dp),onClick={details=f}){
+                        Card(modifier=Modifier.weight(1f),shape=RoundedCornerShape(20.dp),onClick={details=f}){
                             Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
                                 Text(f.name,style=MaterialTheme.typography.titleSmall,maxLines=2)
                                 Text(f.temperature,color=flame,style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
