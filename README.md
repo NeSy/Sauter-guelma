@@ -70,3 +70,6 @@ Vérification de PlagesHorairesViewLS/OnJour_Clicked : dimanche=0, lundi=1, same
 
 ## V0.8.4 — sauvegardes hebdomadaires
 Capture explicite des 7 journées du programme Habitation dans un profil local nommé, séparé par poêle. Plusieurs profils possibles. Restauration d'une seule journée explicitement choisie, après lecture du programme courant et confirmation ; horaires, activation, température et silence restaurés, limites de puissance actuelles conservées, bits inconnus préservés. Relecture exacte et refus en cas de modification concurrente. Aucun ordre programmé dans Android. Tests de restauration et correspondance des jours.
+
+## V0.8.5 — météo extérieure facultative
+Commune choisie manuellement (aucun GPS), Open-Meteo Geocoding et Forecast API, https://open-meteo.com/en/docs (données CC BY 4.0, API gratuite non commerciale). Identifiants des équipements jamais transmis à ce service. Cache et limite des appels. Migration historique Hoben v2 avec température extérieure modélisée nullable et analyse descriptive par écart intérieur/extérieur, sans commande automatique. Export CSV enrichi.

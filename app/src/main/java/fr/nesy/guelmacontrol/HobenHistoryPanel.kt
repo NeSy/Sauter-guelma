@@ -90,6 +90,12 @@ internal fun HobenHistoryPanel(enabled:Boolean,setEnabled:(Boolean)->Unit,auto:B
                     Text("Intervalles avec puissance positive aux deux extrémités : ${stats.poweredMinutes.toInt()} min sur ${stats.coveredMinutes.toInt()} min exploitables")
                     Text(stats.cooling?.let{String.format(java.util.Locale.FRANCE,"Refroidissement observé médian : %.2f °C/h",it)}?:"Refroidissement : données encore insuffisantes")
                     Text("Estimations ponctuelles, pas de durée de combustion ni de consommation de granulés mesurée.",style=MaterialTheme.typography.bodySmall)
+                    val weatherStats=hobenOutdoorStats(rows,HouseWeatherSource.location(c)?.id)
+                    if(weatherStats.isNotEmpty()){
+                        Text("Refroidissement et écart intérieur / extérieur",style=MaterialTheme.typography.titleMedium)
+                        weatherStats.forEach{w->Text(String.format(java.util.Locale.FRANCE,"%s : %.2f °C/h (%d intervalles)",w.label,w.rate,w.count))}
+                        Text("Météo modélisée, pas une sonde extérieure. Associations observées.",style=MaterialTheme.typography.bodySmall)
+                    }
                 }else Text("Activez l’observation pour construire l’historique.")
                 OutlinedButton(onClick={exportRows=rows.toList();export.launch("hoben-${days}j.csv")},enabled=rows.isNotEmpty()){Text("Exporter les relevés CSV")}
                 if(exportStatus.isNotBlank())Text(exportStatus)

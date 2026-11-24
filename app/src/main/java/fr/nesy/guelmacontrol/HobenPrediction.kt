@@ -56,8 +56,8 @@ internal fun hobenWarmupMinutes(model:HobenThermalModel,ambient:Double,target:Do
     return minutes.takeIf{it in 15..180}
 }
 internal fun hobenCsv(rows:List<HobenMeasure>):String=buildString{
-    appendLine("timestamp_iso,ambient_c,target_c,power_percent,state,override_active")
-    rows.forEach{r->appendLine(listOf(Instant.ofEpochMilli(r.time).toString(),r.ambient?.toString().orEmpty(),r.target?.toString().orEmpty(),r.power?.toString().orEmpty(),r.state.toString(),if(r.overrideActive)"1"else"0").joinToString(","))}
+    appendLine("timestamp_iso,ambient_c,target_c,power_percent,state,override_active,outdoor_model_c")
+    rows.forEach{r->appendLine(listOf(Instant.ofEpochMilli(r.time).toString(),r.ambient?.toString().orEmpty(),r.target?.toString().orEmpty(),r.power?.toString().orEmpty(),r.state.toString(),if(r.overrideActive)"1"else"0",r.outdoor?.toString().orEmpty()).joinToString(","))}
 }
 @Composable
 internal fun HobenPredictionPanel(saved:Boolean,stamp:Long,reload:Int){

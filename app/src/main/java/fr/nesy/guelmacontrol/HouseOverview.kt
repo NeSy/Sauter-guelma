@@ -65,5 +65,6 @@ internal fun HouseOverview(model:DiagnosticModel,heater:Device?,openWater:()->Un
         if(model.connected&&!model.demo)model.refresh() else if(model.remembered&&!model.demo)model.reconnect()
         if(saved&&!model.demo){refreshing=true;scope.launch{try{withContext(Dispatchers.IO){HobenObservation.collect(c.applicationContext,"Hoben · accueil")}}finally{refreshing=false}}}
     },enabled=!model.busy&&!refreshing&&!model.demo&&(saved||model.remembered||model.connected),modifier=Modifier.fillMaxWidth()){Text(if(refreshing)"Actualisation…"else "Actualiser les appareils")}
+    HouseWeatherPanel()
     Text("Les cartes affichent les derniers relevés, pas un état garanti en temps réel.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
 }

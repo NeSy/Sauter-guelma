@@ -19,26 +19,26 @@ import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 internal fun hobenDeviceKey(id:String)=MessageDigest.getInstance("SHA-256").digest(id.toByteArray(Charsets.UTF_8)).joinToString(""){"%02x".format(it.toInt() and 255)}
-internal data class HobenMeasure(val time:Long,val ambient:Double?,val target:Double?,val power:Int?,val state:Int,val overrideActive:Boolean)
+internal data class HobenMeasure(val time:Long,val ambient:Double?,val target:Double?,val power:Int?,val state:Int,val overrideActive:Boolean,val outdoor:Double?=null,val weatherPlace:String?=null)
 
-internal class HobenHistoryStore(private val c:Context):SQLiteOpenHelper(c,"hoben_history.db",null,1){
-    override fun onCreate(db:SQLiteDatabase){db.execSQL("CREATE TABLE measures(device TEXT NOT NULL,time INTEGER NOT NULL,ambient REAL,target REAL,power INTEGER,state INTEGER,override_active INTEGER,PRIMARY KEY(device,time))")}
-    override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int){}
-    fun record(s:HobenSnapshot):Boolean=synchronized(lock){
+internal class HobenHistoryStore(private val c:Context):SQLiteOpenHelper(c,"hoben_history.db",null,2){
+    override fun onCreate(db:SQLiteDatabase){db.execSQL("CREATE TABLE measures(device TEXT NOT NULL,time INTEGER NOT NULL,ambient REAL,target REAL,power INTEGER,state INTEGER,override_active INTEGER,outdoor REAL,weather_place TEXT,PRIMARY KEY(device,time))")}
+    override fun onUpgrade(db:SQLiteDatabase,oldVersion:Int,newVersion:Int){if(oldVersion<2){db.execSQL("ALTER TABLE measures ADD COLUMN outdoor REAL");db.execSQL("ALTER TABLE measures ADD COLUMN weather_place TEXT")}}
+    fun record(s:HobenSnapshot,weather:HouseWeather?=null):Boolean=synchronized(lock){
         if(!HobenObservation.enabled(c)||s.deviceKey.isEmpty()||(s.ambient==null&&s.target==null))return@synchronized false
         val db=writableDatabase
         db.delete("measures","time<?",arrayOf((System.currentTimeMillis()-90L*86400000).toString()))
         db.rawQuery("SELECT MAX(time) FROM measures WHERE device=?",arrayOf(s.deviceKey)).use{
             if(it.moveToFirst()&&!it.isNull(0)&&s.timestamp-it.getLong(0)<120000)return@synchronized false
         }
-        val v=ContentValues().apply{put("device",s.deviceKey);put("time",s.timestamp);put("ambient",s.ambient);put("target",s.target);put("power",s.power);put("state",s.state);put("override_active",if(s.activeOverride)1 else 0)}
+        val v=ContentValues().apply{put("device",s.deviceKey);put("time",s.timestamp);put("ambient",s.ambient);put("target",s.target);put("power",s.power);put("state",s.state);put("override_active",if(s.activeOverride)1 else 0);val w=weather?.takeIf{kotlin.math.abs(it.time-s.timestamp)<=5400000L};put("outdoor",w?.temperature);put("weather_place",w?.placeId)}
         db.insertWithOnConflict("measures",null,v,SQLiteDatabase.CONFLICT_IGNORE)!=-1L
     }
     fun recent(key:String,days:Int):List<HobenMeasure> = synchronized(lock){
         writableDatabase.delete("measures","time<?",arrayOf((System.currentTimeMillis()-90L*86400000).toString()))
         if(key.isEmpty())return@synchronized emptyList()
-        readableDatabase.rawQuery("SELECT time,ambient,target,power,state,override_active FROM measures WHERE device=? AND time>=? ORDER BY time",arrayOf(key,(System.currentTimeMillis()-days*86400000L).toString())).use{r->
-            buildList{while(r.moveToNext())add(HobenMeasure(r.getLong(0),if(r.isNull(1))null else r.getDouble(1),if(r.isNull(2))null else r.getDouble(2),if(r.isNull(3))null else r.getInt(3),r.getInt(4),r.getInt(5)==1))}
+        readableDatabase.rawQuery("SELECT time,ambient,target,power,state,override_active,outdoor,weather_place FROM measures WHERE device=? AND time>=? ORDER BY time",arrayOf(key,(System.currentTimeMillis()-days*86400000L).toString())).use{r->
+            buildList{while(r.moveToNext())add(HobenMeasure(r.getLong(0),if(r.isNull(1))null else r.getDouble(1),if(r.isNull(2))null else r.getDouble(2),if(r.isNull(3))null else r.getInt(3),r.getInt(4),r.getInt(5)==1,if(r.isNull(6))null else r.getDouble(6),if(r.isNull(7))null else r.getString(7)))}
         }
     }
     fun clear(){synchronized(lock){writableDatabase.delete("measures",null,null)}}
@@ -74,7 +74,7 @@ internal object HobenObservation{
     fun accept(c:Context,s:HobenSnapshot,source:String){
         if(!publish(c,s)||!enabled(c))return
         val event=CollectionLog.start(c,source)
-        try{CollectionLog.finish(c,event,if(HobenHistoryStore(c).use{it.record(s)})"Relevé enregistré" else "Doublon ou mesure indisponible")}
+        try{CollectionLog.finish(c,event,if(HobenHistoryStore(c).use{it.record(s,HouseWeatherSource.cached(c))})"Relevé enregistré" else "Doublon ou mesure indisponible")}
         catch(_:Exception){CollectionLog.finish(c,event,"Erreur de stockage")}
     }
     fun collect(c:Context,source:String):HobenPairResult{
@@ -89,7 +89,10 @@ internal object HobenObservation{
                 HobenPairResult.PinRequired->"Autorisation nécessaire"
             }
             message.value=outcome
-            if(s!=null&&publish(c,s)&&event!=null)outcome=if(HobenHistoryStore(c).use{it.record(s)})"Relevé enregistré"else "Doublon ou mesure indisponible"
+            if(s!=null&&publish(c,s)&&event!=null){
+                val weather=HouseWeatherSource.refresh(c)
+                outcome=if(HobenHistoryStore(c).use{it.record(s,weather)})"Relevé enregistré"else "Doublon ou mesure indisponible"
+            }
             return result
         }catch(_:Exception){outcome="Lecture ou stockage indisponible";message.value=outcome;return HobenPairResult.Failed(outcome)}
         finally{if(event!=null)CollectionLog.finish(c,event,outcome)}
