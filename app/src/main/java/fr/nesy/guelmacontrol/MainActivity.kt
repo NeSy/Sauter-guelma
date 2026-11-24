@@ -3,6 +3,11 @@ package fr.nesy.guelmacontrol
 import android.os.Bundle
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -29,7 +34,20 @@ import kotlinx.coroutines.sync.withLock
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF72D6F9), background = Color(0xFF0B1423), surface = Color(0xFF18283B))) { DiagnosticScreen() } }
+        val model = ViewModelProvider(this)[DiagnosticModel::class.java]
+        setContent {
+            val colors = if (isSystemInDarkTheme()) darkColorScheme(primary = Color(0xFF72D6F9), background = Color(0xFF0B1423), surface = Color(0xFF18283B))
+                else lightColorScheme(primary = Color(0xFF00678A), background = Color(0xFFF4F9FC), surface = Color(0xFFFFFFFF))
+            MaterialTheme(colorScheme = colors) { DiagnosticScreen(model) }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (true) {
+                    delay(120000)
+                    if (model.connected && !model.demo && !model.busy && !model.needsRefresh) model.refresh()
+                }
+            }
+        }
     }
 }
 
@@ -39,6 +57,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
     private val historyContext = application
     var historyEnabled by mutableStateOf(HistorySettings.enabled(application)); private set
     var devices by mutableStateOf<List<Device>>(emptyList()); private set
+    var lastSync by mutableStateOf(0L); private set
     var actionMessage by mutableStateOf(""); private set
     var needsRefresh by mutableStateOf(false); private set
     var summary by mutableStateOf(""); private set
@@ -94,6 +113,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
             try {
                 devices = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { action().also { rows -> runCatching { HistoryStore(historyContext).use { it.record(rows) } } } } }
                 summary = api.discoverySummary
+                if (devices.isNotEmpty()) lastSync = System.currentTimeMillis()
                 needsRefresh = false
                 connected = true
             } catch (e: CancellationException) { throw e }
@@ -107,7 +127,28 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
         if (busy || demo || !connected || needsRefresh) return
         busy = true; needsRefresh = true; actionMessage = ""
         viewModelScope.launch {
-            try { actionMessage = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { api.send(command, value) } } }
+            try {
+                actionMessage = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { api.send(command, value) } }
+                for (wait in listOf(5000L, 12000L, 20000L)) {
+                    actionMessage = "Ordre envoyé ; vérification du retour d’état…"
+                    delay(wait)
+                    val rows = withContext(Dispatchers.IO) {
+                        CloudGate.mutex.withLock {
+                            api.readDevices().also { data -> runCatching { HistoryStore(historyContext).use { it.record(data) } } }
+                        }
+                    }
+                    devices = rows
+                    summary = api.discoverySummary
+                    if (rows.isNotEmpty()) lastSync = System.currentTimeMillis()
+                    val heater = rows.singleOrNull { it.type == HEATER_TYPE }
+                    if (heater != null && heater.available == true && commandMatches(heater, command, value)) {
+                        actionMessage = "Commande confirmée par le retour d’état Cozytouch."
+                        needsRefresh = false
+                        break
+                    }
+                }
+                if (needsRefresh) actionMessage = "Ordre envoyé, mais état non confirmé. Actualisez avant toute nouvelle commande."
+            }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { actionMessage = (if (e is ApiException) e.message.orEmpty() else "Résultat de l’ordre inconnu.") + " Actualisez avant de réessayer." }
             finally { busy = false }
@@ -128,12 +169,12 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
     var password by remember { mutableStateOf("") }
     var rememberConnection by remember { mutableStateOf(true) }
     var copied by remember { mutableStateOf(false) }
-    var showDetails by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(0) }
     val clipboard = LocalClipboardManager.current
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Guelma Control", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Sauter Guelma 2 MP · 65 L · V0.3.0")
+            Text("Sauter Guelma 2 MP · 65 L · V0.3.1")
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Connexion Cozytouch", style = MaterialTheme.typography.titleLarge)
@@ -155,17 +196,25 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                 OutlinedButton(onClick = { password = ""; email = ""; model.showDemo(); copied = false }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Essayer le mode démo") }
                 Text("Si la mémorisation est activée, les identifiants sont chiffrés sur ce téléphone avec Android Keystore. Ils ne sont transmis qu’à Cozytouch via HTTPS.", style = MaterialTheme.typography.bodySmall)
             } else {
-                Text(model.devices.size.toString() + " appareil(s) détecté(s)", style = MaterialTheme.typography.titleLarge)
-                if (!model.demo && model.summary.isNotBlank()) Text(model.summary, style = MaterialTheme.typography.bodySmall)
+                TabRow(selectedTabIndex = tab) {
+                    listOf("Pilotage", "Analyse", "Réglages").forEachIndexed { index, title ->
+                        Tab(selected = tab == index, onClick = { tab = index }, text = { Text(title) })
+                    }
+                }
+                if (!model.demo && model.lastSync > 0) Text("Dernière synchronisation : " + java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(model.lastSync)), style = MaterialTheme.typography.bodySmall)
+                if (tab == 2) {
+                    Text(model.devices.size.toString() + " appareil(s) détecté(s)", style = MaterialTheme.typography.titleLarge)
+                    if (!model.demo && model.summary.isNotBlank()) Text(model.summary, style = MaterialTheme.typography.bodySmall)
+                }
                 if (model.devices.isEmpty()) Text("Aucun appareil détecté. Copiez le diagnostic pour examiner les étapes de connexion.")
                 val heater = model.devices.singleOrNull { it.type == HEATER_TYPE }
-                if (heater != null) {
-                    HeaterDashboard(heater, model)
-                    if (!model.demo) HistoryPanel(heater, model)
+                if (heater != null && tab == 0) HeaterDashboard(heater, model)
+                if (tab == 1) {
+                    if (heater != null && !model.demo) HistoryPanel(heater, model)
+                    else Text("Connectez le chauffe-eau réel pour accéder à l’analyse.")
                 }
                 if (model.actionMessage.isNotBlank()) Text(model.actionMessage, color = MaterialTheme.colorScheme.primary)
-                OutlinedButton(onClick = { showDetails = !showDetails }, modifier = Modifier.fillMaxWidth()) { Text(if (showDetails) "Masquer le diagnostic" else "Afficher le diagnostic") }
-                if (showDetails) model.devices.forEachIndexed { index, device ->
+                if (tab == 2) model.devices.forEachIndexed { index, device ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Appareil " + (index + 1), style = MaterialTheme.typography.titleMedium)
@@ -185,10 +234,10 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                     }
                 }
                 if (!model.demo) Button(onClick = { model.refresh(); copied = false }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Actualiser") }
-                Text("Le rapport ne contient pas les noms, adresses, jetons ou numéros de série. Relisez les valeurs numériques avant de partager.", style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = { clipboard.setText(AnnotatedString(diagnosticReport(model.devices, model.demo, model.summary))); copied = true }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (copied) "Rapport copié" else "Copier le diagnostic") }
-                if (model.remembered && !model.demo) Text("Connexion mémorisée sur cet appareil.", style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = { model.logout(); email = ""; password = ""; copied = false }, enabled = !model.busy) { Text(if (model.demo) "Quitter la démo" else "Déconnexion et oubli des identifiants") }
+                if (tab == 2) Text("Le rapport ne contient pas les noms, adresses, jetons ou numéros de série. Relisez les valeurs numériques avant de partager.", style = MaterialTheme.typography.bodySmall)
+                if (tab == 2) OutlinedButton(onClick = { clipboard.setText(AnnotatedString(diagnosticReport(model.devices, model.demo, model.summary))); copied = true }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (copied) "Rapport copié" else "Copier le diagnostic") }
+                if (tab == 2 && model.remembered && !model.demo) Text("Connexion mémorisée sur cet appareil.", style = MaterialTheme.typography.bodySmall)
+                if (tab == 2 || model.demo) TextButton(onClick = { model.logout(); tab = 0; email = ""; password = ""; copied = false }, enabled = !model.busy) { Text(if (model.demo) "Quitter la démo" else "Déconnexion et oubli des identifiants") }
             }
             if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (model.error.isNotBlank()) Text(model.error, color = MaterialTheme.colorScheme.error)
@@ -247,7 +296,7 @@ private fun HeaterDashboard(heater: Device, model: DiagnosticModel) {
         }
     }
     Text("Pilotage expérimental", style = MaterialTheme.typography.titleLarge)
-    Text("Un ordre à la fois. Actualisez après chaque envoi pour vérifier l’état du ballon.", style = MaterialTheme.typography.bodySmall)
+    Text("Un ordre à la fois. Le retour d’état est vérifié automatiquement.", style = MaterialTheme.typography.bodySmall)
     listOf("Auto" to "autoMode", "Manuel éco" to "manualEcoActive", "Manuel" to "manualEcoInactive").forEach { (label, value) ->
         OutlinedButton(onClick = { pending = PendingOrder("setDHWMode", value, label) },
             enabled = enabled && mode != value && validCommand(heater, "setDHWMode", value), modifier = Modifier.fillMaxWidth()) { Text(if (mode == value) label + " (actif)" else label) }

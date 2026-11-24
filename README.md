@@ -19,3 +19,6 @@ JDK 17, Android SDK 35, Gradle 8.9. Actions > Android APK > Artifacts > Guelma-C
 
 ## V0.3.0 — observation des usages
 Option volontaire, connexion mémorisée requise. Mesures locales SQLite à chaque actualisation et environ toutes les 30 minutes via WorkManager (retards possibles). Conservation 90 jours, purge manuelle disponible. Aucune commande automatique. Les intervalles candidats exigent une baisse d'au moins une douche estimée et 3 °C sur une sonde, sans changement de mode/consigne/boost/absence, et des observations proches. Classement semaine/week-end indicatif, non une mesure du débit ou une prévision. Le compteur électrique est enregistré brut, sans conversion non vérifiée.
+
+## V0.3.1 — confort de pilotage
+Onglets Pilotage, Analyse et Réglages. Thème clair/sombre selon Android. Actualisation toutes les deux minutes en premier plan et vérification bornée du retour d’état après commande (sans réenvoi automatique). En cas de résultat incertain, actualisation manuelle requise. L’observation demeure volontaire et désactivée à la première installation.

@@ -186,7 +186,7 @@ internal fun diagnosticValue(value: Any?): String {
     return "masqué (texte ou structure)"
 }
 internal fun diagnosticReport(devices: List<Device>, demo: Boolean, summary: String = ""): String = buildString {
-    appendLine("Guelma Control 0.3.0 — " + if (demo) "DÉMO" else "diagnostic")
+    appendLine("Guelma Control 0.3.1 — " + if (demo) "DÉMO" else "diagnostic")
     if (!demo && summary.isNotBlank()) appendLine(summary)
     appendLine("Appareils détectés : " + devices.size)
     devices.forEachIndexed { index, device ->
@@ -218,3 +218,15 @@ internal fun validCommand(device: Device, command: String, value: Any): Boolean 
 
 internal fun historyKey(url: String): String = java.security.MessageDigest.getInstance("SHA-256")
     .digest(url.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it.toInt() and 255) }
+
+internal fun commandMatches(device: Device, command: String, value: Any): Boolean {
+    val state = when (command) {
+        "setDHWMode" -> "modbuslink:DHWModeState"
+        "setBoostMode" -> "modbuslink:DHWBoostModeState"
+        "setExpectedNumberOfShower" -> "core:ExpectedNumberOfShowerState"
+        "setTargetDHWTemperature" -> "core:TargetDHWTemperatureState"
+        else -> return false
+    }
+    val actual = device.state(state) ?: return false
+    return if (value is Number) actual.toDoubleOrNull() == value.toDouble() else actual == value.toString()
+}
