@@ -60,6 +60,8 @@ internal object HobenFavorites{
         prefs(c).edit().putString("list",a.toString()).apply()
         HobenWidget.refresh(c)
     }
+    fun direct(c:Context)=prefs(c).getBoolean("direct_widget",false)
+    fun setDirect(c:Context,enabled:Boolean){prefs(c).edit().putBoolean("direct_widget",enabled).apply();HobenWidget.refresh(c)}
     fun selected(c:Context)=prefs(c).getString("selected","default")
     fun select(c:Context,id:String){prefs(c).edit().putString("selected",id).apply();HobenWidget.refresh(c)}
     fun primary(c:Context):HobenFavorite?=load(c).let{rows->rows.firstOrNull{it.id==selected(c)}?:rows.firstOrNull()}
@@ -101,7 +103,13 @@ class HobenWidget:AppWidgetProvider(){
             val views=RemoteViews(c.packageName,R.layout.hoben_widget)
             views.setTextViewText(R.id.hoben_widget_value,f?.compactTemperature?:"—")
             views.setTextViewText(R.id.hoben_widget_duration,f?.compactDuration?:"Choisir")
-            val intent=if(f!=null) Intent(c,HobenActivity::class.java).putExtra("favorite",f.id) else Intent(c,HobenWidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id)
+            val intent=when{
+                f==null -> Intent(c,HobenWidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id)
+                HobenFavorites.direct(c) -> Intent(c,HobenQuickActivity::class.java)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id).putExtra("favorite",f.id)
+                    .putExtra("temperature",f.halfDegrees).putExtra("minutes",f.minutes)
+                else -> Intent(c,HobenActivity::class.java).putExtra("favorite",f.id)
+            }
             val pending=PendingIntent.getActivity(c,id,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             views.setOnClickPendingIntent(R.id.hoben_widget_root,pending)
             m.updateAppWidget(id,views)
@@ -133,7 +141,8 @@ private fun HobenView(initial:String?,back:()->Unit){
     var commandBusy by remember{mutableStateOf(false)}
     var pairBusy by remember{mutableStateOf(false)}
     var commandStatus by remember{mutableStateOf("")}
-    var uncertain by remember{mutableStateOf(false)}
+    var uncertain by remember{mutableStateOf(HobenOverrideGateway.needsRead(c))}
+    var directWidget by remember{mutableStateOf(HobenFavorites.direct(c))}
     var cancelConfirm by remember{mutableStateOf(false)}
     val scope=rememberCoroutineScope()
     val flame=Color(0xFFE58A43)
@@ -151,7 +160,7 @@ private fun HobenView(initial:String?,back:()->Unit){
                     HobenPairResult.PinRequired->"Autorisation nécessaire. Refaire la connexion avant toute commande."
                     is HobenPairResult.Failed->result.message
                 }
-                uncertain=(result is HobenPairResult.Opened&&result.state==null)
+                uncertain=HobenOverrideGateway.needsRead(c)
             }finally{commandBusy=false}
         }
     }
@@ -200,11 +209,13 @@ private fun HobenView(initial:String?,back:()->Unit){
                 }
             }
             if(list.isEmpty())Text("Ajoutez votre première dérogation favorite.")
-            HobenPairingPanel(commandBusy,{pairBusy=it}){snapshot=it;if(it!=null)uncertain=false}
+            HobenPairingPanel(commandBusy,{pairBusy=it}){snapshot=it;if(it!=null){HobenOverrideGateway.noteRead(c,it);uncertain=HobenOverrideGateway.needsRead(c)}}
             Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text("Widgets Android · 1 × 1",style=MaterialTheme.typography.titleMedium)
-                    Text("Ajoutez plusieurs widgets depuis le sélecteur Android, puis choisissez un favori par widget. Un appui ouvre le favori ; confirmez pour envoyer la dérogation. Le favori étoilé est le choix par défaut.")
+                    Text("Chaque widget garde son propre favori. Le favori étoilé est le choix par défaut.")
+                    Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("Activation en un appui");Text("Sans confirmation préalable, avec résultat du poêle.",style=MaterialTheme.typography.bodySmall)};Switch(checked=directWidget,onCheckedChange={directWidget=it;HobenFavorites.setDirect(c,it)})}
+                    Text(if(directWidget)"Un appui sur une icône lance une demande de dérogation réelle."else "Un appui ouvre la confirmation du favori.",style=MaterialTheme.typography.bodySmall)
                     val manager=AppWidgetManager.getInstance(c)
                     Button(onClick={manager.requestPinAppWidget(ComponentName(c,HobenWidget::class.java),null,null)},enabled=manager.isRequestPinAppWidgetSupported&&list.isNotEmpty()){Text("Ajouter le widget")}
                 }

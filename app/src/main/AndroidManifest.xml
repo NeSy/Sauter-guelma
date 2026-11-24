@@ -4,6 +4,7 @@
         <activity android:name=".HobenWidgetConfigActivity" android:exported="true">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/></intent-filter>
         </activity>
+        <activity android:name=".HobenQuickActivity" android:exported="false" android:excludeFromRecents="true" android:theme="@android:style/Theme.Material.Dialog.NoActionBar"/>
         <activity android:name=".HobenActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
         <receiver android:name=".HobenWidget" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>

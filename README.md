@@ -52,3 +52,6 @@ Le relevé réel de V0.7.3 est confirmé sur H5 type 5, révision 0, logiciel 8.
 
 ## V0.7.5 — icônes Hoben carrées
 Widget 1×1 : fond extérieur transparent, icône centrée de 44 × 44 dp, coins arrondis de 9 dp. La grille du lanceur peut rester rectangulaire mais le fond coloré ne s'étire plus. Les associations de favoris et le parcours de confirmation sont inchangés.
+
+## V0.7.6 — widget Hoben actionnable
+Activation et annulation de V0.7.4/0.7.5 validées par le propriétaire sur le H5. Option globale explicite « Activation en un appui » (désactivée par défaut) : chaque widget 1×1 lance le favori qui lui est associé, sans navigation dans l'application, via une petite activité de résultat. Vérification de l'association et des valeurs affichées au moment du clic, lecture fraîche et garde-fous existants, confirmation par relecture. Pas de tâche différée ni de renvoi automatique ; verrou partagé et journal persistant pour les résultats incertains, à lever par une nouvelle lecture réelle. Aucun démarrage forcé ni remplacement automatique d'une dérogation existante. Taille carrée 44dp conservée. Test du widget sur téléphone requis.

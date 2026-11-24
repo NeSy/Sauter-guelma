@@ -77,7 +77,33 @@ internal fun applyHobenOverride(socket:SSLSocket,input:DataInputStream,before:Ho
     }
 }
 internal object HobenOverrideGateway{
-    @Synchronized fun execute(context:Context,order:HobenOverride):HobenPairResult{
-        return HobenPairSession(context).use{it.open(null,true,order)}
+    private val gate=java.util.concurrent.locks.ReentrantLock()
+    private fun prefs(c:Context)=c.getSharedPreferences("hoben_command_guard",Context.MODE_PRIVATE)
+    fun needsRead(c:Context)=prefs(c).getBoolean("pending",false)
+    fun noteRead(c:Context,snapshot:HobenSnapshot){
+        if(!gate.tryLock())return
+        try{
+            val p=prefs(c)
+            if(snapshot.timestamp>=p.getLong("since",Long.MAX_VALUE))p.edit().remove("pending").remove("since").commit()
+        }finally{gate.unlock()}
+    }
+    fun execute(context:Context,order:HobenOverride):HobenPairResult{
+        if(!gate.tryLock())return HobenPairResult.Failed("Une commande est déjà en cours. Aucun nouvel ordre envoyé.")
+        try{
+            val p=prefs(context)
+            if(needsRead(context))return HobenPairResult.Failed("Résultat précédent à vérifier. Ouvrez Hoben puis Lire mon poêle.")
+            if(!p.edit().putBoolean("pending",true).putLong("since",System.currentTimeMillis()).commit())
+                return HobenPairResult.Failed("Journal local indisponible. Aucun ordre envoyé.")
+            val result=HobenPairSession(context).use{it.open(null,true,order)}
+            if(result !is HobenPairResult.Opened || result.state!=null){
+                p.edit().remove("pending").remove("since").commit()
+            }else{
+                p.edit().putLong("since",System.currentTimeMillis()).commit()
+            }
+            return result
+        }catch(_:Exception){
+            prefs(context).edit().putLong("since",System.currentTimeMillis()).commit()
+            return HobenPairResult.Failed("Résultat incertain. Relisez le poêle avant toute nouvelle commande.")
+        }finally{gate.unlock()}
     }
 }
