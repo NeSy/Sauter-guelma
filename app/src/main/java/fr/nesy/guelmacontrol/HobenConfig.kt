@@ -9,6 +9,13 @@ internal data class HobenDetails(val day:Int,val config:List<Int>,val slots:List
     val manualTemp get()=config[5].toShort().toInt()/10.0
     val vacationTemp get()=config[3].toShort().toInt()/10.0
     val vacationEnabled get()=config[6] and 1!=0
+    val noVacationEnd get()=config[6] and 2!=0
+    val commissioning get()=historyDate(5,6)
+    val maintenance get()=historyDate(7,8)
+    private fun historyDate(dayIndex:Int,yearMonthIndex:Int):java.time.LocalDate?=runCatching{
+        val ym=counters[yearMonthIndex]
+        java.time.LocalDate.of(2000+(ym ushr 8),ym and 255,counters[dayIndex] and 255)
+    }.getOrNull()
     val vacationEnd get()=runCatching{LocalDateTime.of(2000+(config[0] and 255),config[1] ushr 8,config[1] and 255,config[2] ushr 8,config[2] and 255)}.getOrNull()
 }
 internal data class HobenSlot(val active:Boolean,val start:Int,val end:Int,val silence:Boolean,val temp:Int,val maxPower:Int)
@@ -53,16 +60,17 @@ private fun words(p:ByteArray,fn:Int,count:Int):List<Int>{
     return List(count){i->((p[2+i*2].toInt() and 255) shl 8) or (p[3+i*2].toInt() and 255)}
 }
 private fun regs(s:SSLSocket,i:DataInputStream,address:Int,count:Int,tx:Int)=words(request(s,i,tx,listOf<Byte>(4)+word(address)+word(count)),4,count)
+internal fun hobenDayIndex(day:java.time.DayOfWeek)=day.value%7
 internal fun readHobenDetails(s:SSLSocket,i:DataInputStream,day:Int):HobenDetails{
     require(day in 0..6)
     return HobenDetails(day,regs(s,i,1536,7,101),regs(s,i,3072+21*day,21,102),regs(s,i,2560,35,103))
 }
 internal fun applyHobenConfig(s:SSLSocket,i:DataInputStream,before:HobenSnapshot,order:HobenOverride):HobenOverrideOutcome{
     fun blocked(t:String)=HobenOverrideOutcome(before,t+" Aucun ordre envoyé.")
-    if(before.faults!=0||before.mode !in listOf(0,2)||before.activeOverride||before.scheduledOverride)return blocked("État incompatible avec la configuration.")
+    if(before.faults!=0||before.mode !in listOf(0,2)||before.activeOverride||before.scheduledOverride||before.info and (4 or 128 or 2048)!=0)return blocked("État incompatible avec la configuration.")
     try{
         val cfg=regs(s,i,1536,7,111)
-        if(order is HobenOverride.Schedule&&cfg[6] and 1!=0)return blocked("Mode vacances actif : terminez les vacances avant de modifier le programme.")
+        if((order is HobenOverride.Schedule||order is HobenOverride.VacationConfig)&&cfg[6] and 1!=0)return blocked("Mode vacances actif : terminez les vacances avant de modifier le programme.")
         val readBack:(List<Int>)->Boolean
         val pdu:List<Byte>
         when(order){
@@ -85,7 +93,7 @@ internal fun applyHobenConfig(s:SSLSocket,i:DataInputStream,before:HobenSnapshot
             }
             is HobenOverride.Vacation->{
                 val detail=HobenDetails(0,cfg,List(21){0},emptyList())
-                if(order.enabled&&(detail.vacationEnd?.isAfter(LocalDateTime.now())!=true||detail.vacationTemp !in 15.0..25.0))return blocked("Configurez une date future et une température de vacances valide.")
+                if(order.enabled&&(detail.noVacationEnd||detail.vacationEnd?.isAfter(LocalDateTime.now())!=true||detail.vacationTemp !in 15.0..25.0))return blocked("Configurez une date future et une température de vacances valide.")
                 pdu=listOf<Byte>(22)+word(1800)+word(65534)+word(if(order.enabled)1 else 0)
                 readBack={(it[6] and 1!=0)==order.enabled}
             }

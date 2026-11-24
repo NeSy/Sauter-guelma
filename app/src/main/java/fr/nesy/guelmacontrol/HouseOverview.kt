@@ -52,7 +52,10 @@ internal fun HouseOverview(model:DiagnosticModel,heater:Device?,openWater:()->Un
             if(s!=null){
                 Text("Puissance "+(s.power?.let{"$it %"}?:"—")+" · "+s.ventLabel,color=Color(0xFFF3DCCB))
                 Text(if(s.activeOverride)"Dérogation active · "+heatTemp(s.overrideTemp)else if(s.scheduledOverride)"Dérogation programmée"else s.modeLabel+" · "+if(s.onOff==1)"Marche autorisée"else "Arrêt demandé",color=Color(0xFFFFC28C))
-                if(s.faults!=0)Text("Défaut signalé",color=Color(0xFFFFC28C))
+                if(s.vacationActive)Text("Vacances actives",color=Color(0xFFFFC28C))
+                if(s.frostActive)Text("Protection hors gel",color=Color(0xFFFFC28C))
+                if(s.openWindow||s.externalStop)Text("Chauffe suspendue (état signalé)",color=Color(0xFFFFC28C))
+                if(s.faults!=0||s.warnings!=0)Text("Défaut ou avertissement signalé",color=Color(0xFFFFC28C))
                 Text("Relevé "+timeText(s.timestamp),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelMedium)
             }
             if(status.isNotBlank()&&status!="Lecture réussie."&&!model.demo)Text(status,color=Color(0xFFF3DCCB),style=MaterialTheme.typography.bodySmall)

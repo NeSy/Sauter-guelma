@@ -40,7 +40,7 @@ private fun hhmm(m:Int)=String.format(java.util.Locale.FRANCE,"%02d:%02d",m/60,m
 @Composable internal fun HobenConfigPanel(enabled:Boolean,ask:(HobenOverride,String)->Unit,stamp:Long){
     val c=LocalContext.current.applicationContext
     val scope=rememberCoroutineScope()
-    var day by remember{mutableStateOf(0)}
+    var day by remember{mutableStateOf(1)}
     var details by remember{mutableStateOf<HobenDetails?>(null)}
     var busy by remember{mutableStateOf(false)}
     var msg by remember{mutableStateOf("Lire les réglages du poêle.")}
@@ -53,7 +53,7 @@ private fun hhmm(m:Int)=String.format(java.util.Locale.FRANCE,"%02d:%02d",m/60,m
         Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
             Text("Réglages natifs Hoben",style=MaterialTheme.typography.titleLarge)
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                listOf("Lun","Mar","Mer","Jeu","Ven","Sam","Dim").forEachIndexed{i,n->FilterChip(selected=i==day,onClick={day=i;details=null},enabled=!busy,label={Text(n)})}
+                listOf(1 to "Lun",2 to "Mar",3 to "Mer",4 to "Jeu",5 to "Ven",6 to "Sam",0 to "Dim").forEach{(i,n)->FilterChip(selected=i==day,onClick={day=i;details=null},enabled=!busy,label={Text(n)})}
             }
             OutlinedButton(onClick={val selected=day;busy=true;details=null;scope.launch{
                 try{val r=withContext(Dispatchers.IO){HobenPairSession(c).use{it.open(null,true,detailDay=selected)}};details=(r as? HobenPairResult.Opened)?.details;msg=if(details!=null)"Réglages lus."else when(r){is HobenPairResult.Opened->r.readStatus;is HobenPairResult.Failed->r.message;else->"Autorisation requise."}}finally{busy=false}
@@ -72,10 +72,13 @@ private fun hhmm(m:Int)=String.format(java.util.Locale.FRANCE,"%02d:%02d",m/60,m
                 Text("Consigne manuelle : ${d.manualTemp} °C")
                 OutlinedButton(onClick={manual=true},enabled=ready){Text("Modifier la consigne manuelle")}
                 Text("Vacances : "+if(d.vacationEnabled)"activées"else "désactivées")
-                Text("Retour : "+(d.vacationEnd?.toString()?.replace('T',' ')?:"Non défini")+" · ${d.vacationTemp} °C")
+                Text("Retour : "+(if(d.noVacationEnd)"Sans date de fin"else d.vacationEnd?.toString()?.replace('T',' ')?:"Non défini")+" · ${d.vacationTemp} °C")
                 OutlinedButton(onClick={vacation=true},enabled=ready){Text("Configurer les vacances")}
                 OutlinedButton(onClick={ask(HobenOverride.Vacation(!d.vacationEnabled),if(d.vacationEnabled)"Désactiver le mode vacances ?"else "Activer les vacances selon la configuration enregistrée ?")},enabled=ready){Text(if(d.vacationEnabled)"Terminer les vacances"else "Activer les vacances")}
                 Text("Compteurs du poêle",style=MaterialTheme.typography.titleMedium)
+                d.commissioning?.let{Text("Mise en service : "+it.format(DateTimeFormatter.ofPattern("dd/MM/uuuu")))}
+                d.maintenance?.let{Text("Dernière maintenance : "+it.format(DateTimeFormatter.ofPattern("dd/MM/uuuu")))}
+                Text("Les compteurs sont lus directement dans le poêle, sans réinitialisation.",style=MaterialTheme.typography.bodySmall)
                 if(d.counters.size>=5){listOf("0–40 %","41–60 %","61–80 %","81–100 %").forEachIndexed{i,n->Text("$n : ${d.counters[i]} h")};Text("Allumages : ${d.counters[4]}")}
             }
         }

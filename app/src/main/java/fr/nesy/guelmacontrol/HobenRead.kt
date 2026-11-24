@@ -13,6 +13,12 @@ internal data class HobenSnapshot(
 ){
     val modeLabel:String get()=when(mode){0->"Habitation";1->"Magasin";2->"Manuel";else->"Mode non reconnu ($mode)"}
     val stateLabel:String get()=when(state){0->"En attente";1->"Arrêt";2->"Démarrage";3->"Stabilisation";4->"Modulation";5->"Fin de combustion";6->"Démarrage standard";7->"Redémarrage après coupure";8->"Gestion combustion";else->"État non reconnu ($state)"}
+    val vacationActive get()=info and 1!=0
+    val frostActive get()=info and 4!=0
+    val externalStop get()=info and 128!=0
+    val openWindow get()=info and 2048!=0
+    val cleaning get()=info and 256!=0
+    val anticipating get()=info and 512!=0
     val ventLabel:String get()=when(vent){0->"Normal";1->"Silence";2->"Boost";else->"Non reconnue ($vent)"}
 }
 // Fixed allowlisted input-register read; no generic register/write API.

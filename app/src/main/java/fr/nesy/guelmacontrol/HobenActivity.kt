@@ -191,7 +191,14 @@ private fun HobenView(initial:String?,back:()->Unit){
                         Text("Puissance "+(reading.power?.let{"$it %"}?:"—")+" · Ventilation "+reading.ventLabel,color=Color(0xFFF3DCCB))
                         Text(if(reading.activeOverride)"Dérogation active"else if(reading.scheduledOverride)"Dérogation programmée"else "Pas de dérogation signalée",color=Color(0xFFF3DCCB))
                         if(reading.activeOverride||reading.scheduledOverride)Text("Dérogation : "+(reading.overrideTemp?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—")+" · durée remontée "+reading.overrideMinutes+" min",color=Color(0xFFF3DCCB))
-                        if(reading.faults!=0)Text("Défaut signalé : consultez MyHOBEN ou le poêle.",color=Color(0xFFFFC28C))
+                        if(reading.vacationActive)Text("Vacances actives",color=Color(0xFFFFC28C))
+                        if(reading.frostActive)Text("Protection hors gel active",color=Color(0xFFFFC28C))
+                        if(reading.openWindow)Text("Fenêtre ouverte détectée",color=Color(0xFFFFC28C))
+                        if(reading.externalStop)Text("Arrêt externe signalé",color=Color(0xFFFFC28C))
+                        if(reading.cleaning)Text("Cycle de nettoyage",color=Color(0xFFF3DCCB))
+                        if(reading.anticipating)Text("Anticipation de chauffe",color=Color(0xFFF3DCCB))
+                        if(reading.faults!=0)Text("Défaut signalé (code brut ${reading.faults}) : consultez MyHOBEN ou le poêle.",color=Color(0xFFFFC28C))
+                        if(reading.warnings!=0)Text("Avertissement (code brut ${reading.warnings}) : consultez MyHOBEN ou le poêle.",color=Color(0xFFFFC28C))
                         Text("Dernier relevé : "+java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT,java.text.DateFormat.SHORT).format(java.util.Date(reading.timestamp)),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelSmall)
                     }
                 }

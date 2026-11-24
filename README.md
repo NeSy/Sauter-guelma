@@ -64,3 +64,6 @@ Analyse renouvelée de HobenCore et HobenApp 2.2 : fonction 06 adresses 1280, 12
 
 ## V0.8.2 — analyse thermique Hoben et export
 Prévision indicative à partir de relevés réels 30 jours ; apprentissage sur les 23 premiers jours, validation sur les 7 derniers, minimum 14 jours de couverture d'au moins 12h, 60 % de couverture totale, 12 paires chauffe/apprentissage et 8 de validation. Paires 2–45 minutes, consigne constante, puissance positive aux deux extrémités, absence de dérogation. Comparaison MAE à la persistance ; estimation limitée à 3h et 2°C d'écart, non utilisable si validation insuffisante. Pas de commande automatique ni estimation de pellets. Export CSV local. Tests déterministes du modèle. Données distinctes par poêle.
+
+## V0.8.3 — jours de programmation et états natifs
+Vérification de PlagesHorairesViewLS/OnJour_Clicked : dimanche=0, lundi=1, samedi=6. Affichage des dates de mise en service/maintenance si valides (registre historique 2565–2568), états vacances, hors gel, arrêt externe, fenêtre ouverte, nettoyage, anticipation et codes bruts d'avertissement. Blocage de configuration incompatible. Aucune modification des protections. Les commandes de programmation nécessitent toujours une validation matérielle.
