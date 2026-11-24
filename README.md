@@ -40,3 +40,6 @@ Espace indépendant Hoben, favoris locaux nommés (température, durée), sélec
 
 ## V0.7.1 — widgets 1×1
 Widget compact 1×1, température et durée uniquement, association indépendante de chaque instance à un favori, configuration/réglage depuis les lanceurs compatibles. Aucun ordre réseau depuis le widget. Les favoris existants restent conservés. Analyse APK MyHOBEN 2.2 : présence confirmée d'une branche TLS distante et d'une phase d'identification distincte ; aucun message applicatif Hoben n'est encore envoyé, tant que le format d'ouverture et l'autorisation de lecture ne sont pas validés.
+
+## V0.7.2 — appairage MyHOBEN expérimental
+D’après les méthodes ConnectToServer, SendDeviceAuth et ManageOpened de MyHOBEN 2.2 : ouverture TLS avec identifiant fourni par le propriétaire, identifiant client propre à cette installation, demande éventuelle du code affiché sur le poêle. Lecture de la réponse d’identification (type, révision, version) uniquement. Aucun registre de commande, aucun réglage de chauffe, aucune tentative automatique ni contournement d’autorisation. Identifiant mémorisé uniquement dans un coffre Android Keystore distinct de Cozytouch, après réponse positive. Validation réseau sur matériel réel requise.

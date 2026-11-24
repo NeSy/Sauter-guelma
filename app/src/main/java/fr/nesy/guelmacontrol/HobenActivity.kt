@@ -162,6 +162,7 @@ private fun HobenView(initial:String?,back:()->Unit){
                 }
             }
             if(list.isEmpty())Text("Ajoutez votre première dérogation favorite.")
+            HobenPairingPanel()
             Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text("Widgets Android · 1 × 1",style=MaterialTheme.typography.titleMedium)
@@ -172,7 +173,7 @@ private fun HobenView(initial:String?,back:()->Unit){
             }
             Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    Text("Connexion MyHOBEN",style=MaterialTheme.typography.titleMedium)
+                    Text("Diagnostic réseau",style=MaterialTheme.typography.titleMedium)
                     Text("Test réseau sécurisé uniquement : myhoben.fr, port 465. Aucun identifiant demandé.")
                     Text(status,style=MaterialTheme.typography.bodySmall)
                     if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())

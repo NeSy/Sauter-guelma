@@ -11,9 +11,9 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-internal class CredentialVault(context: Context) {
-    private val prefs = context.getSharedPreferences("cozytouch_encrypted", Context.MODE_PRIVATE)
-    private val alias = "guelma.cozytouch.credentials.v1"
+internal class CredentialVault(context: Context, namespace: String = "cozytouch") {
+    private val prefs = context.getSharedPreferences(namespace + "_encrypted", Context.MODE_PRIVATE)
+    private val alias = "guelma." + namespace + ".credentials.v1"
 
     fun hasCredentials() = prefs.contains("payload") && prefs.contains("iv")
 
