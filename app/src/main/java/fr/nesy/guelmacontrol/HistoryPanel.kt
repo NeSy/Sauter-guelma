@@ -20,10 +20,11 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
     var status by remember { mutableStateOf("") }
     var lastAttempt by remember { mutableStateOf(0L) }
     var clearDialog by remember { mutableStateOf(false) }
-    LaunchedEffect(heater.historyKey, model.historyEnabled) {
+    var period by remember { mutableStateOf(14) }
+    LaunchedEffect(heater.historyKey, model.historyEnabled, period) {
         while (true) {
             rows = withContext(Dispatchers.IO) {
-                runCatching { HistoryStore(context).use { it.recent(heater.historyKey) } }.getOrDefault(emptyList())
+                runCatching { HistoryStore(context).use { it.recent(heater.historyKey, period) } }.getOrDefault(emptyList())
             }
             status = HistorySettings.status(context)
             lastAttempt = HistorySettings.lastAttempt(context)
@@ -45,9 +46,12 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
                 Text(status, style = MaterialTheme.typography.bodySmall)
                 if (lastAttempt > 0) Text("Dernière tentative : " + DateFormat.getDateTimeInstance().format(Date(lastAttempt)), style = MaterialTheme.typography.bodySmall)
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(1, 7, 14, 30, 90).forEach { n -> FilterChip(selected = period == n, onClick = { period = n }, label = { Text(n.toString()+"j") }) }
+            }
             if (rows.isNotEmpty()) {
                 Text("Dernière mesure : " + DateFormat.getDateTimeInstance().format(Date(rows.last().time)), style = MaterialTheme.typography.bodySmall)
-                Text("Sur les 14 derniers jours : " + stats.samples + " relevés · " + stats.days + " jours observés")
+                Text("Sur les " + period + " derniers jours : " + stats.samples + " relevés · " + stats.days + " jours observés")
                 Text(stats.likelyEvents.toString() + " intervalles de soutirage probable / " + stats.usablePairs + " intervalles exploitables")
                 Text("Ce ne sont pas des nombres de douches mesurés. Les chutes de réserve et de température sont des indices ; une chauffe simultanée peut les masquer.", style = MaterialTheme.typography.bodySmall)
                 if (stats.days < 14) Text("Apprentissage en cours : viser au moins 14 jours bien couverts. Pas encore de prévision fiable.")
@@ -57,6 +61,7 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
             OutlinedButton(onClick = { clearDialog = true }) { Text("Effacer l’historique") }
         }
     }
+    AdvancedAnalysis(rows, heater.historyKey)
     CollectionLogPanel()
     if (clearDialog) AlertDialog(onDismissRequest = { clearDialog = false }, title = { Text("Effacer tous les relevés ?") },
         text = { Text("L’observation sera désactivée et les relevés locaux supprimés.") },

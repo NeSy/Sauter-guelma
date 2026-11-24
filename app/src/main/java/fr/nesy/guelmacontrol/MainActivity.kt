@@ -142,7 +142,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
                     if (rows.isNotEmpty()) lastSync = System.currentTimeMillis()
                     val heater = rows.singleOrNull { it.type == HEATER_TYPE }
                     if (heater != null && heater.available == true && commandMatches(heater, command, value)) {
-                        actionMessage = "Commande confirmée par le retour d’état Cozytouch."
+                        actionMessage = if (command == "setAbsenceMode" && value is Int) "Mode absence confirmé ; vérifiez la date de retour dans Cozytouch." else "Commande confirmée par le retour d’état Cozytouch."
                         needsRefresh = false
                         break
                     }
@@ -214,6 +214,7 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                     else Text("Connectez le chauffe-eau réel pour accéder à l’analyse.")
                 }
                 if (model.actionMessage.isNotBlank()) Text(model.actionMessage, color = MaterialTheme.colorScheme.primary)
+                if (tab == 2) TariffSettingsPanel()
                 if (tab == 2) CollectionLogPanel()
                 if (tab == 2) model.devices.forEachIndexed { index, device ->
                     Card(Modifier.fillMaxWidth()) {
@@ -269,7 +270,7 @@ private fun HeaterDashboard(heater: Device, model: DiagnosticModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Eau chaude disponible", style = MaterialTheme.typography.titleMedium)
-            Text(remaining?.toString() ?: "—", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.displayLarge)
+            TankVisual(remaining, maximum, state("core:HeatingStatusState") == "on")
             Text("Douches restantes estimées")
             if (remaining != null && maximum != null && maximum > 0) {
                 LinearProgressIndicator(progress = { (remaining.toFloat()/maximum).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
@@ -329,6 +330,7 @@ private fun HeaterDashboard(heater: Device, model: DiagnosticModel) {
         }
         Text("Réglage limité aux bornes déclarées par le ballon. Attention aux brûlures à température élevée.", style = MaterialTheme.typography.bodySmall)
     }
+    VacationControls(heater, enabled) { value, label -> pending = PendingOrder("setAbsenceMode", value, label) }
     if (pending != null) {
         val order = pending!!
         AlertDialog(onDismissRequest = { pending = null }, title = { Text("Confirmer la commande") },

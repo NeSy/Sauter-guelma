@@ -130,9 +130,17 @@ internal class CozytouchApi {
         if (overkizCookie.isBlank() || token == null || SystemClock.elapsedRealtime() >= expiresAt)
             throw ApiException("Session expirée. Reconnectez-vous.")
         if (!validCommand(device, command, value)) throw ApiException("Commande non disponible ou valeur hors limites.")
+        fun cmd(name: String, param: Any) = JSONObject().put("name", name).put("parameters", JSONArray().put(param))
+        val commands = if (command == "setAbsenceMode" && value is Int) {
+            val now = java.time.ZonedDateTime.now()
+            fun date(t: java.time.ZonedDateTime) = JSONObject().put("year", t.year).put("month", t.monthValue)
+                .put("day", t.dayOfMonth).put("hour", t.hour).put("minute", t.minute).put("second", t.second)
+                .put("weekday", t.dayOfWeek.value - 1)
+            JSONArray().put(cmd("setDateTime", date(now))).put(cmd("setAbsenceStartDate", date(now)))
+                .put(cmd("setAbsenceEndDate", date(now.plusDays(value.toLong())))).put(cmd("setAbsenceMode", "prog"))
+        } else JSONArray().put(cmd(command, value))
         val payload = JSONObject().put("label", "Guelma Control").put("actions", JSONArray().put(
-            JSONObject().put("deviceURL", url).put("commands", JSONArray().put(
-                JSONObject().put("name", command).put("parameters", JSONArray().put(value))))))
+            JSONObject().put("deviceURL", url).put("commands", commands)))
         val raw = request("/exec/apply", "", payload.toString(), overkiz = true, json = true)
         if (raw.isBlank()) throw ApiException("Réponse vide : résultat inconnu. Actualisez avant toute nouvelle commande.")
         val reply = JSONObject(raw)
@@ -205,6 +213,7 @@ internal fun validCommand(device: Device, command: String, value: Any): Boolean 
     return when(command) {
         "setDHWMode" -> normal && value in setOf("autoMode", "manualEcoActive", "manualEcoInactive")
         "setBoostMode" -> device.state("modbuslink:DHWAbsenceModeState") == "off" && value in setOf("on", "off")
+        "setAbsenceMode" -> if (value == "off") device.state("modbuslink:DHWAbsenceModeState") in setOf("on","prog") else value is Int && value in 1..90 && normal && device.commands.containsAll(listOf("setDateTime","setAbsenceStartDate","setAbsenceEndDate"))
         "setExpectedNumberOfShower", "setTargetDHWTemperature" -> {
             if (!normal || device.state("modbuslink:DHWModeState") != "manualEcoInactive" || value !is Int) return false
             val kind = if (command == "setExpectedNumberOfShower") "Shower" else "Temperature"
@@ -223,10 +232,12 @@ internal fun commandMatches(device: Device, command: String, value: Any): Boolea
     val state = when (command) {
         "setDHWMode" -> "modbuslink:DHWModeState"
         "setBoostMode" -> "modbuslink:DHWBoostModeState"
+        "setAbsenceMode" -> "modbuslink:DHWAbsenceModeState"
         "setExpectedNumberOfShower" -> "core:ExpectedNumberOfShowerState"
         "setTargetDHWTemperature" -> "core:TargetDHWTemperatureState"
         else -> return false
     }
     val actual = device.state(state) ?: return false
+    if (command == "setAbsenceMode" && value is Int) return actual == "prog" || actual == "on"
     return if (value is Number) actual.toDoubleOrNull() == value.toDouble() else actual == value.toString()
 }
