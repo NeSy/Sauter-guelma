@@ -13,7 +13,7 @@ internal sealed interface HobenOverride{
     data class Manual(val halfDegrees:Int):HobenOverride
     data class VacationConfig(val end:java.time.LocalDateTime,val halfDegrees:Int):HobenOverride
     data class Vacation(val enabled:Boolean):HobenOverride
-    data class Schedule(val day:Int,val before:List<Int>,val after:List<Int>):HobenOverride
+    data class Schedule(val day:Int,val before:List<Int>,val after:List<Int>,val restore:Boolean=false):HobenOverride
     data object Cancel:HobenOverride
 }
 internal data class HobenOverrideOutcome(val snapshot:HobenSnapshot?,val message:String)

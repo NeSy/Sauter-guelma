@@ -67,3 +67,6 @@ Prévision indicative à partir de relevés réels 30 jours ; apprentissage sur 
 
 ## V0.8.3 — jours de programmation et états natifs
 Vérification de PlagesHorairesViewLS/OnJour_Clicked : dimanche=0, lundi=1, samedi=6. Affichage des dates de mise en service/maintenance si valides (registre historique 2565–2568), états vacances, hors gel, arrêt externe, fenêtre ouverte, nettoyage, anticipation et codes bruts d'avertissement. Blocage de configuration incompatible. Aucune modification des protections. Les commandes de programmation nécessitent toujours une validation matérielle.
+
+## V0.8.4 — sauvegardes hebdomadaires
+Capture explicite des 7 journées du programme Habitation dans un profil local nommé, séparé par poêle. Plusieurs profils possibles. Restauration d'une seule journée explicitement choisie, après lecture du programme courant et confirmation ; horaires, activation, température et silence restaurés, limites de puissance actuelles conservées, bits inconnus préservés. Relecture exacte et refus en cas de modification concurrente. Aucun ordre programmé dans Android. Tests de restauration et correspondance des jours.

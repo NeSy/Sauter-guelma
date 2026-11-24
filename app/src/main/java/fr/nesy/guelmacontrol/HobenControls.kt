@@ -83,6 +83,7 @@ private fun hhmm(m:Int)=String.format(java.util.Locale.FRANCE,"%02d:%02d",m/60,m
             }
         }
     }
+    HobenProfilesPanel(enabled&&!busy,details,ask)
     val d=details
     slotIndex?.let{i->if(d!=null){
         val slot=decodeSlot(d.slots,i)

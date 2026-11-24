@@ -65,6 +65,7 @@ internal fun readHobenDetails(s:SSLSocket,i:DataInputStream,day:Int):HobenDetail
     require(day in 0..6)
     return HobenDetails(day,regs(s,i,1536,7,101),regs(s,i,3072+21*day,21,102),regs(s,i,2560,35,103))
 }
+internal fun readHobenWeek(s:SSLSocket,i:DataInputStream):List<List<Int>>=(0..6).map{day->regs(s,i,3072+21*day,21,120+day)}
 internal fun applyHobenConfig(s:SSLSocket,i:DataInputStream,before:HobenSnapshot,order:HobenOverride):HobenOverrideOutcome{
     fun blocked(t:String)=HobenOverrideOutcome(before,t+" Aucun ordre envoyé.")
     if(before.faults!=0||before.mode !in listOf(0,2)||before.activeOverride||before.scheduledOverride||before.info and (4 or 128 or 2048)!=0)return blocked("État incompatible avec la configuration.")
@@ -102,10 +103,18 @@ internal fun applyHobenConfig(s:SSLSocket,i:DataInputStream,before:HobenSnapshot
                 val addr=3072+21*order.day
                 if(regs(s,i,addr,21,112)!=order.before)return blocked("Programme modifié depuis le relevé. Rechargez la journée.")
                 val changed=(0..6).filter{j->order.before.subList(j*3,j*3+3)!=order.after.subList(j*3,j*3+3)}
-                if(changed.size!=1)return blocked("Modifiez une plage à la fois.")
-                val idx=changed.single()
-                val slot=decodeSlot(order.after,idx)
-                if(changeSlot(order.before,idx,slot)!=order.after||slot.maxPower!=decodeSlot(order.before,idx).maxPower)return blocked("Configuration de plage non valide.")
+                if(changed.isEmpty())return blocked("Programme déjà identique.")
+                if(!order.restore&&changed.size!=1)return blocked("Modifiez une plage à la fois.")
+                var expected=order.before
+                for(idx in changed){
+                    val slot=decodeSlot(order.after,idx)
+                    val original=decodeSlot(order.before,idx)
+                    if(slot.maxPower!=original.maxPower)return blocked("Limite de puissance à conserver.")
+                    expected=if(order.restore&&!slot.active&&order.after[idx*3]==(expected[idx*3] and 32767)&&order.after[idx*3+1]==expected[idx*3+1]&&order.after[idx*3+2]==expected[idx*3+2]){
+                        expected.toMutableList().apply{this[idx*3]=this[idx*3] and 32767}
+                    }else changeSlot(expected,idx,slot)
+                }
+                if(expected!=order.after)return blocked("Configuration de plage non valide.")
                 val active=(0..6).map{decodeSlot(order.after,it)}.filter{it.active}.sortedBy{it.start}
                 if(active.any{it.start !in 0..1439||it.end !in 1..1440||it.start>=it.end}||active.zipWithNext().any{(a,b)->a.end>b.start})return blocked("Plages invalides ou chevauchantes.")
                 val data=order.after.flatMap(::word)
