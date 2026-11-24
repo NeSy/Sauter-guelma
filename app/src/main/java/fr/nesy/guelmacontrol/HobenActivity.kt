@@ -148,11 +148,14 @@ private fun HobenView(initial:String?,back:()->Unit){
     var uncertain by remember{mutableStateOf(HobenOverrideGateway.needsRead(c))}
     var directWidget by remember{mutableStateOf(HobenFavorites.direct(c))}
     var cancelConfirm by remember{mutableStateOf(false)}
+    var controlOrder by remember{mutableStateOf<Pair<HobenOverride,String>?>(null)}
+    var delayed by remember{mutableStateOf(0)}
+    var configOpen by remember{mutableStateOf(false)}
     val scope=rememberCoroutineScope()
     val flame=Color(0xFFE58A43)
     val savedPairing=CredentialVault(c,"hoben").hasCredentials()
     val canCommand=savedPairing&&!commandBusy&&!pairBusy&&!uncertain&&!monitorBusy
-    HobenMonitor(active=auto&&savedPairing&&!commandBusy&&!pairBusy,onBusy={monitorBusy=it})
+    HobenMonitor(active=auto&&savedPairing&&!commandBusy&&!pairBusy&&!configOpen,onBusy={monitorBusy=it})
     LaunchedEffect(live){if(live!=null){snapshot=live;uncertain=HobenOverrideGateway.needsRead(c)}}
     fun execute(order:HobenOverride){
         if(!canCommand)return
@@ -194,6 +197,8 @@ private fun HobenView(initial:String?,back:()->Unit){
                 }
             }
             if(commandStatus.isNotBlank()) Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp)){Text(commandStatus);if(commandBusy)LinearProgressIndicator(Modifier.fillMaxWidth());if(uncertain)Text("Relisez le poêle avant toute nouvelle commande.")} }
+            HobenControls(snapshot,canCommand,{order,label->controlOrder=order to label},{configOpen=!configOpen},configOpen)
+            if(configOpen)HobenConfigPanel(canCommand&&!commandBusy&&!pairBusy,{order,label->controlOrder=order to label},snapshot?.timestamp?:0L)
             if(snapshot?.let{it.activeOverride||it.scheduledOverride}==true)OutlinedButton(onClick={cancelConfirm=true},enabled=canCommand,modifier=Modifier.fillMaxWidth()){Text("Annuler la dérogation")}
             Row(verticalAlignment=Alignment.CenterVertically){
                 Text("Mes favoris",Modifier.weight(1f),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
@@ -202,7 +207,7 @@ private fun HobenView(initial:String?,back:()->Unit){
             list.chunked(2).forEach{pair->
                 Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
                     pair.forEach{f->
-                        Card(modifier=Modifier.weight(1f),shape=RoundedCornerShape(20.dp),onClick={details=f}){
+                        Card(modifier=Modifier.weight(1f),shape=RoundedCornerShape(20.dp),onClick={delayed=0;details=f}){
                             Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
                                 Text(f.name,style=MaterialTheme.typography.titleSmall,maxLines=2)
                                 Text(f.temperature,color=flame,style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold)
@@ -242,15 +247,18 @@ private fun HobenView(initial:String?,back:()->Unit){
         AlertDialog(onDismissRequest={details=null},title={Text(f.name)},text={
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text(f.temperature+" · "+f.duration,style=MaterialTheme.typography.headlineSmall)
-                Text("Dérogation immédiate, puis retour au programme du poêle. Aucun changement de programmation.")
+                Text("Retour au programme du poêle à la fin. Aucun changement de programmation.")
+                Text(if(delayed==0)"Départ immédiat"else "Départ dans $delayed min")
+                Slider(value=(delayed/15).toFloat(),onValueChange={delayed=it.roundToInt()*15},valueRange=0f..32f,steps=31)
                 if(!savedPairing)Text("Mémorisez d’abord l’appairage dans Connexion au H5.")
                 if(uncertain)Text("Relisez le poêle avant de commander.")
                 OutlinedButton(onClick={HobenFavorites.select(c,f.id);selected=f.id;details=null}){Text("Choisir par défaut")}
                 TextButton(onClick={details=null;editing=f}){Text("Modifier")}
                 TextButton(onClick={details=null;remove=f}){Text("Supprimer")}
             }
-        },confirmButton={Button(onClick={execute(HobenOverride.Start(f.halfDegrees,f.minutes))},enabled=canCommand){Text("Activer")}},dismissButton={TextButton(onClick={details=null}){Text("Fermer")}})
+        },confirmButton={Button(onClick={execute(HobenOverride.Start(f.halfDegrees,f.minutes,delayed))},enabled=canCommand){Text("Activer")}},dismissButton={TextButton(onClick={details=null}){Text("Fermer")}})
     }
+    controlOrder?.let{(order,label)->AlertDialog(onDismissRequest={controlOrder=null},title={Text("Confirmer le réglage")},text={Text(label)},confirmButton={Button(onClick={controlOrder=null;execute(order)},enabled=canCommand){Text("Confirmer")}},dismissButton={TextButton(onClick={controlOrder=null}){Text("Annuler")}})}
     if(cancelConfirm)AlertDialog(onDismissRequest={cancelConfirm=false},title={Text("Reprendre le programme habituel ?")},text={Text("Annuler la dérogation active ou programmée du poêle.")},confirmButton={Button(onClick={execute(HobenOverride.Cancel)},enabled=canCommand){Text("Confirmer")}},dismissButton={TextButton(onClick={cancelConfirm=false}){Text("Retour")}})
     editing?.let{f->
         var name by remember(f.id){mutableStateOf(f.name)}

@@ -27,7 +27,7 @@ internal fun hobenPinFrame(pin:Int):ByteArray {
 
 internal data class HobenIdentity(val type:Int,val revision:Int,val major:Int,val minor:Int)
 internal sealed interface HobenPairResult {
-    data class Opened(val identity:HobenIdentity,val state:HobenSnapshot?=null,val readStatus:String=""):HobenPairResult
+    data class Opened(val identity:HobenIdentity,val state:HobenSnapshot?=null,val readStatus:String="",val details:HobenDetails?=null):HobenPairResult
     data object PinRequired:HobenPairResult
     data class Failed(val message:String):HobenPairResult
 }
@@ -40,7 +40,7 @@ internal class HobenPairSession(context:Context):AutoCloseable {
     private var challengeTime=0L
     fun hasSaved()=vault.hasCredentials()
     fun forget(){close();HobenObservation.configure(contextRef,false);vault.clear();HobenObservation.clearLive()}
-    @Synchronized fun open(raw:String?,remember:Boolean,command:HobenOverride?=null):HobenPairResult {
+    @Synchronized fun open(raw:String?,remember:Boolean,command:HobenOverride?=null,detailDay:Int?=null):HobenPairResult {
         close()
         val saved=vault.load()
         val id=if(raw==null)saved?.first else normalizeHobenId(raw)
@@ -65,7 +65,7 @@ internal class HobenPairSession(context:Context):AutoCloseable {
                 userId=id
                 val frame=hobenOpenFrame(id,deviceId,"Android/Home Energy Control/Phone/Android/1/0/0/1/0/0,0")
                 tls.outputStream.write(frame);tls.outputStream.flush()
-                val result=readReply(remember,command)
+                val result=readReply(remember,command,detailDay)
                 if(result==HobenPairResult.PinRequired && command==null)challengeTime=android.os.SystemClock.elapsedRealtime()
                 else close()
                 result
@@ -111,7 +111,7 @@ internal class HobenPairSession(context:Context):AutoCloseable {
                     try {
                         val key=hobenDeviceKey(id)
                         val snapshot=readHobenSnapshot(socket!!,input).copy(deviceKey=key)
-                        if(command==null)HobenPairResult.Opened(identity,snapshot,"Lecture réussie.")
+                        if(command==null)HobenPairResult.Opened(identity,snapshot,"Lecture réussie.",if(detailDay!=null)readHobenDetails(socket!!,input,detailDay)else null)
                         else {
                             val outcome=applyHobenOverride(socket!!,input,snapshot,command)
                             HobenPairResult.Opened(identity,outcome.snapshot?.copy(deviceKey=key),outcome.message)
