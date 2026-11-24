@@ -8,7 +8,7 @@ import java.net.URLEncoder
 import javax.net.ssl.HttpsURLConnection
 
 data class Capability(val id: Int, val value: String)
-data class Device(val model: Int, val product: Int, val available: Boolean?, val capabilities: List<Capability>)
+data class Device(val model: Int, val product: Int, val available: Boolean?, val capabilities: List<Capability>, val protocol: String = "Magellan", val type: String = "", val states: List<Pair<String, String>> = emptyList(), val commands: List<String> = emptyList())
 internal class ApiException(message: String): Exception(message)
 
 internal class CozytouchApi {
@@ -19,7 +19,11 @@ internal class CozytouchApi {
     private var expiresAt = 0L
     private var blockedUntil = 0L
 
-    fun logout() { token = null; expiresAt = 0L }
+    private var overkizCookie = ""
+    private val overkizBase = "https://ha110-1.overkiz.com/enduser-mobile-web/enduserAPI"
+    var discoverySummary = ""
+        private set
+    fun logout() { token = null; expiresAt = 0L; overkizCookie = ""; discoverySummary = "" }
     fun login(email: String, password: String): List<Device> {
         logout()
         val fields = mapOf("grant_type" to "password", "scope" to "openid",
@@ -35,8 +39,9 @@ internal class CozytouchApi {
     fun readDevices(): List<Device> {
         val access = token ?: throw ApiException("Reconnectez-vous.")
         if (SystemClock.elapsedRealtime() >= expiresAt) { logout(); throw ApiException("Session expirée. Reconnectez-vous.") }
+        discoverySummary = "Authentification Atlantic : OK"
         val setup = JSONArray(request("/magellan/cozytouch/setupviewv2", "Bearer " + access))
-        return buildList {
+        val magellan = buildList {
             for (i in 0 until setup.length()) {
                 val devices = setup.optJSONObject(i)?.optJSONArray("devices") ?: continue
                 for (j in 0 until devices.length()) {
@@ -54,17 +59,68 @@ internal class CozytouchApi {
                 }
             }
         }
+        discoverySummary += "\nMagellan : " + setup.length() + " installation(s), " + magellan.size + " appareil(s)"
+        if (magellan.isNotEmpty()) return magellan
+        return try {
+            val devices = readOverkiz(access)
+            discoverySummary += "\nOverkiz : " + devices.size + " appareil(s)"
+            devices
+        } catch (e: Exception) {
+            discoverySummary += "\nOverkiz : " + (if (e is ApiException) e.message.orEmpty() else "réponse inattendue ou erreur réseau")
+            emptyList()
+        }
+    }
+
+    private fun readOverkiz(access: String): List<Device> {
+        if (overkizCookie.isEmpty()) {
+            val raw = request("/magellan/accounts/jwt", "Bearer " + access).trim()
+            val jwt = if (raw.startsWith("{")) JSONObject(raw).optString("jwt") else raw.trim('"')
+            if (!Regex("^[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+$").matches(jwt))
+                throw ApiException("JWT absent ou invalide")
+            discoverySummary += "\nÉchange JWT : OK"
+            val login = request("/login", "", "jwt=" + encode(jwt), overkiz = true, captureCookie = true)
+            if (login.trim().startsWith("{") && !JSONObject(login).optBoolean("success", true))
+                throw ApiException("Connexion Overkiz refusée")
+            if (overkizCookie.isBlank()) throw ApiException("Cookie Overkiz absent")
+            discoverySummary += "\nSession Overkiz : OK"
+        }
+        val rows = JSONArray(request("/setup/devices", "", overkiz = true))
+        return buildList {
+            for (i in 0 until rows.length()) {
+                val d = rows.optJSONObject(i) ?: continue
+                val definition = d.optJSONObject("definition")
+                val type = safeTechnicalName(d.optString("controllableName", definition?.optString("uiClass").orEmpty()))
+                val states = d.optJSONArray("states") ?: JSONArray()
+                val commands = definition?.optJSONArray("commands") ?: JSONArray()
+                add(Device(-1, -1, if (d.has("available") && !d.isNull("available")) d.optBoolean("available") else null,
+                    emptyList(), "Overkiz", type,
+                    buildList {
+                        for (j in 0 until states.length()) {
+                            val s = states.optJSONObject(j) ?: continue
+                            val name = safeTechnicalName(s.optString("name"))
+                            if (name.isNotEmpty()) add(name to diagnosticValue(s.opt("value")))
+                        }
+                    },
+                    buildList {
+                        for (j in 0 until commands.length()) {
+                            val name = safeTechnicalName(commands.optJSONObject(j)?.optString("commandName").orEmpty())
+                            if (name.isNotEmpty()) add(name)
+                        }
+                    }))
+            }
+        }
     }
 
     private fun encode(s: String) = URLEncoder.encode(s, "UTF-8")
-    private fun request(path: String, auth: String, form: String? = null): String {
+    private fun request(path: String, auth: String, form: String? = null, overkiz: Boolean = false, captureCookie: Boolean = false): String {
         if (SystemClock.elapsedRealtime() < blockedUntil) throw ApiException("Limite de requêtes atteinte. Réessayez plus tard.")
-        val connection = URL(base + path).openConnection() as HttpsURLConnection
+        val connection = URL((if (overkiz) overkizBase else base) + path).openConnection() as HttpsURLConnection
         try {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = 20000
             connection.readTimeout = 20000
-            connection.setRequestProperty("Authorization", auth)
+            if (!overkiz) connection.setRequestProperty("Authorization", auth)
+            if (overkiz && overkizCookie.isNotBlank()) connection.setRequestProperty("Cookie", overkizCookie)
             connection.setRequestProperty("Accept", "application/json")
             if (form != null) {
                 connection.requestMethod = "POST"
@@ -78,24 +134,36 @@ internal class CozytouchApi {
                 blockedUntil = SystemClock.elapsedRealtime() + delay.coerceIn(60, 86400) * 1000
                 throw ApiException("Limite de requêtes atteinte. Réessayez plus tard.")
             }
-            if (status == 401) { logout(); throw ApiException("Authentification refusée ou session expirée (401).") }
+            if (status == 401) { if (overkiz) overkizCookie = "" else logout(); throw ApiException("Authentification refusée ou session expirée (401).") }
             if (status == 400 && form != null) throw ApiException("Connexion refusée (400). Vérifiez les identifiants et la compatibilité.")
             if (status !in 200..299) throw ApiException("Réponse Cozytouch : HTTP " + status)
+            if (captureCookie && overkiz) {
+                overkizCookie = connection.headerFields.entries
+                    .filter { it.key?.equals("Set-Cookie", ignoreCase = true) == true }
+                    .flatMap { it.value }.map { it.substringBefore(';') }.joinToString("; ")
+            }
             return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally { connection.disconnect() }
     }
 }
+internal fun safeTechnicalName(raw: String): String =
+    raw.takeIf { it.length in 1..100 && Regex("^[A-Za-z][A-Za-z0-9_:.-]*$").matches(it) }.orEmpty()
+
 internal fun diagnosticValue(value: Any?): String {
     val raw = value?.toString() ?: return "non renseigné"
     if (raw == "null") return "non renseigné"
-    if (raw == "true" || raw == "false") return raw
+    if (raw in setOf("true", "false", "autoMode", "manualEcoActive", "manualEcoInactive", "absence", "relaunch", "on", "off", "auto", "manual", "eco", "comfort", "standby", "boost", "always", "available", "unavailable")) return raw
     if (raw.length <= 14 && Regex("^-?[0-9]+(\\.[0-9]+)?$").matches(raw)) return raw
     return "masqué (texte ou structure)"
 }
-internal fun diagnosticReport(devices: List<Device>, demo: Boolean): String = buildString {
-    appendLine("Guelma Control 0.1 — " + if (demo) "DÉMO" else "diagnostic")
+internal fun diagnosticReport(devices: List<Device>, demo: Boolean, summary: String = ""): String = buildString {
+    appendLine("Guelma Control 0.1.1 — " + if (demo) "DÉMO" else "diagnostic")
+    if (!demo && summary.isNotBlank()) appendLine(summary)
+    appendLine("Appareils détectés : " + devices.size)
     devices.forEachIndexed { index, device ->
-        appendLine("Appareil " + (index + 1) + " | modèle=" + device.model + " | produit=" + device.product + " | disponible=" + device.available)
+        appendLine("Appareil " + (index + 1) + " | " + device.protocol + " | " + device.type + " | modèle=" + device.model + " | produit=" + device.product + " | disponible=" + device.available)
+        device.states.sortedBy { it.first }.forEach { appendLine(it.first + " = " + it.second) }
+        if (device.commands.isNotEmpty()) appendLine("Commandes déclarées (non exécutées) : " + device.commands.sorted().joinToString(", "))
         device.capabilities.sortedBy { it.id }.forEach { appendLine("capacité " + it.id + " = " + it.value) }
     }
 }

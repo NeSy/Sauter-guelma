@@ -2,8 +2,8 @@
 
 Application Android indépendante pour le Sauter Guelma 2 MP 65 L Wi-Fi.
 
-## V0.1 — diagnostic
-- Connexion expérimentale au cloud Cozytouch Magellan et lecture des appareils/capacités.
+## V0.1.1 — diagnostic
+- Connexion expérimentale au cloud Cozytouch Magellan et lecture des appareils/capacités. Si aucun appareil ne remonte, échange JWT et découverte Overkiz (référence https://github.com/NicolasYDDER/homey-cozytouch). Aucun ordre de pilotage envoyé ; seules les commandes déclarées sont listées.
 - Aucun ordre de chauffe ; aucune modification de la configuration.
 - Mode démo clairement identifié, sans connexion réseau.
 - Rapport copiable limité aux identifiants de modèles et capacités, valeurs numériques/booléennes et métadonnées techniques. Vérifiez-le avant de le partager.

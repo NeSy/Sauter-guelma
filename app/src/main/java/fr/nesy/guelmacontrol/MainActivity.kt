@@ -32,6 +32,7 @@ class MainActivity : ComponentActivity() {
 class DiagnosticModel : ViewModel() {
     private val api = CozytouchApi()
     var devices by mutableStateOf<List<Device>>(emptyList()); private set
+    var summary by mutableStateOf(""); private set
     var connected by mutableStateOf(false); private set
     var demo by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
@@ -44,6 +45,7 @@ class DiagnosticModel : ViewModel() {
         viewModelScope.launch {
             try {
                 devices = withContext(Dispatchers.IO) { action() }
+                summary = api.discoverySummary
                 connected = true
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
@@ -54,10 +56,10 @@ class DiagnosticModel : ViewModel() {
     }
     fun showDemo() {
         if (busy) return
-        api.logout(); demo = true; connected = true; error = ""
+        api.logout(); summary = ""; demo = true; connected = true; error = ""
         devices = listOf(Device(0, 0, true, listOf(Capability(1, "75"), Capability(2, "true"), Capability(3, "2"))))
     }
-    fun logout() { if (!busy) { api.logout(); connected = false; demo = false; devices = emptyList(); error = "" } }
+    fun logout() { if (!busy) { api.logout(); summary = ""; connected = false; demo = false; devices = emptyList(); error = "" } }
     override fun onCleared() { api.logout(); super.onCleared() }
 }
 
@@ -70,7 +72,7 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Guelma Control", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Sauter Guelma 2 MP · 65 L · V0.1")
+            Text("Sauter Guelma 2 MP · 65 L · V0.1.1")
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Diagnostic en lecture seule", style = MaterialTheme.typography.titleLarge)
@@ -85,12 +87,15 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                 Text("API expérimentale. Mot de passe non enregistré. Les identifiants sont transmis uniquement au service Cozytouch via HTTPS.", style = MaterialTheme.typography.bodySmall)
             } else {
                 Text(model.devices.size.toString() + " appareil(s) détecté(s)", style = MaterialTheme.typography.titleLarge)
-                if (model.devices.isEmpty()) Text("Aucun appareil dans la réponse Cozytouch.")
+                if (!model.demo && model.summary.isNotBlank()) Text(model.summary, style = MaterialTheme.typography.bodySmall)
+                if (model.devices.isEmpty()) Text("Aucun appareil détecté. Copiez le diagnostic pour examiner les étapes de connexion.")
                 model.devices.forEachIndexed { index, device ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Appareil " + (index + 1), style = MaterialTheme.typography.titleMedium)
-                            Text("Modèle : " + device.model + " · Produit : " + device.product)
+                            Text(device.protocol + " · " + if (device.protocol == "Magellan") "Modèle : " + device.model + " · Produit : " + device.product else device.type)
+                            device.states.forEach { state -> Text(state.first + " = " + state.second) }
+                            if (device.commands.isNotEmpty()) Text("Commandes déclarées : " + device.commands.joinToString(", "))
                             Text("Disponibilité déclarée : " + when(device.available) { true -> "oui"; false -> "non"; null -> "inconnue" })
                             Text(device.capabilities.size.toString() + " capacités déclarées")
                             HorizontalDivider()
@@ -105,7 +110,7 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                 }
                 if (!model.demo) Button(onClick = { model.refresh(); copied = false }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Actualiser") }
                 Text("Le rapport ne contient pas les noms, adresses, jetons ou numéros de série. Relisez les valeurs numériques avant de partager.", style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = { clipboard.setText(AnnotatedString(diagnosticReport(model.devices, model.demo))); copied = true }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (copied) "Rapport copié" else "Copier le diagnostic") }
+                OutlinedButton(onClick = { clipboard.setText(AnnotatedString(diagnosticReport(model.devices, model.demo, model.summary))); copied = true }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (copied) "Rapport copié" else "Copier le diagnostic") }
                 TextButton(onClick = { model.logout(); email = ""; password = ""; copied = false }, enabled = !model.busy) { Text("Déconnexion") }
             }
             if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
