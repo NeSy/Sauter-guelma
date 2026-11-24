@@ -32,12 +32,14 @@ class MainActivity : ComponentActivity() {
 class DiagnosticModel : ViewModel() {
     private val api = CozytouchApi()
     var devices by mutableStateOf<List<Device>>(emptyList()); private set
+    var actionMessage by mutableStateOf(""); private set
+    var needsRefresh by mutableStateOf(false); private set
     var summary by mutableStateOf(""); private set
     var connected by mutableStateOf(false); private set
     var demo by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf(""); private set
-    fun login(email: String, password: String) = runRequest { api.login(email, password) }
+    fun login(email: String, password: String) { actionMessage = ""; needsRefresh = false; runRequest { api.login(email, password) } }
     fun refresh() { if (connected && !demo) runRequest { api.readDevices() } }
     private fun runRequest(action: () -> List<Device>) {
         if (busy) return
@@ -46,6 +48,7 @@ class DiagnosticModel : ViewModel() {
             try {
                 devices = withContext(Dispatchers.IO) { action() }
                 summary = api.discoverySummary
+                needsRefresh = false
                 connected = true
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
@@ -54,12 +57,22 @@ class DiagnosticModel : ViewModel() {
             } finally { busy = false }
         }
     }
+    fun send(command: String, value: Any) {
+        if (busy || demo || !connected || needsRefresh) return
+        busy = true; needsRefresh = true; actionMessage = ""
+        viewModelScope.launch {
+            try { actionMessage = withContext(Dispatchers.IO) { api.send(command, value) } }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { actionMessage = (if (e is ApiException) e.message.orEmpty() else "Résultat de l’ordre inconnu.") + " Actualisez avant de réessayer." }
+            finally { busy = false }
+        }
+    }
     fun showDemo() {
         if (busy) return
-        api.logout(); summary = ""; demo = true; connected = true; error = ""
+        api.logout(); summary = ""; actionMessage = ""; needsRefresh = false; demo = true; connected = true; error = ""
         devices = listOf(Device(0, 0, true, listOf(Capability(1, "75"), Capability(2, "true"), Capability(3, "2"))))
     }
-    fun logout() { if (!busy) { api.logout(); summary = ""; connected = false; demo = false; devices = emptyList(); error = "" } }
+    fun logout() { if (!busy) { api.logout(); summary = ""; actionMessage = ""; needsRefresh = false; connected = false; demo = false; devices = emptyList(); error = "" } }
     override fun onCleared() { api.logout(); super.onCleared() }
 }
 
@@ -68,15 +81,16 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var copied by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Guelma Control", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Sauter Guelma 2 MP · 65 L · V0.1.1")
+            Text("Sauter Guelma 2 MP · 65 L · V0.2.0")
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Diagnostic en lecture seule", style = MaterialTheme.typography.titleLarge)
-                    Text(if (model.demo) "Données fictives. Aucun appareil contacté." else "Aucune commande de chauffe n’est envoyée.")
+                    Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Connexion Cozytouch", style = MaterialTheme.typography.titleLarge)
+                    Text(if (model.demo) "Données fictives. Aucun appareil contacté." else "Pilotage expérimental. Confirmation avant chaque ordre.")
                 }
             }
             if (!model.connected) {
@@ -89,7 +103,11 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                 Text(model.devices.size.toString() + " appareil(s) détecté(s)", style = MaterialTheme.typography.titleLarge)
                 if (!model.demo && model.summary.isNotBlank()) Text(model.summary, style = MaterialTheme.typography.bodySmall)
                 if (model.devices.isEmpty()) Text("Aucun appareil détecté. Copiez le diagnostic pour examiner les étapes de connexion.")
-                model.devices.forEachIndexed { index, device ->
+                val heater = model.devices.singleOrNull { it.type == HEATER_TYPE }
+                if (heater != null) HeaterDashboard(heater, model)
+                if (model.actionMessage.isNotBlank()) Text(model.actionMessage, color = MaterialTheme.colorScheme.primary)
+                OutlinedButton(onClick = { showDetails = !showDetails }, modifier = Modifier.fillMaxWidth()) { Text(if (showDetails) "Masquer le diagnostic" else "Afficher le diagnostic") }
+                if (showDetails) model.devices.forEachIndexed { index, device ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Appareil " + (index + 1), style = MaterialTheme.typography.titleMedium)
@@ -117,5 +135,96 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
             if (model.error.isNotBlank()) Text(model.error, color = MaterialTheme.colorScheme.error)
             Text("Application indépendante, non affiliée à Sauter ou Atlantic.", style = MaterialTheme.typography.bodySmall)
         }
+    }
+}
+
+
+private data class PendingOrder(val command: String, val value: Any, val label: String)
+
+@Composable
+private fun HeaterDashboard(heater: Device, model: DiagnosticModel) {
+    fun state(name: String) = heater.state(name)
+    fun display(name: String, suffix: String = "") = state(name)?.takeUnless { it.startsWith("masqué") || it == "non renseigné" }?.let { it + suffix } ?: "—"
+    val remaining = state("core:NumberOfShowerRemainingState")?.toIntOrNull()
+    val maximum = state("core:MaximalShowerManualModeState")?.toIntOrNull()
+    val target = state("core:TargetDHWTemperatureState")?.toDoubleOrNull()?.toInt()
+    val desired = state("core:ExpectedNumberOfShowerState")?.toIntOrNull()
+    val minTemp = state("core:MinimalTemperatureManualModeState")?.toDoubleOrNull()?.toInt()
+    val maxTemp = state("core:MaximalTemperatureManualModeState")?.toDoubleOrNull()?.toInt()
+    val minShower = state("core:MinimalShowerManualModeState")?.toIntOrNull()
+    val mode = state("modbuslink:DHWModeState")
+    val boost = state("modbuslink:DHWBoostModeState")
+    val absence = state("modbuslink:DHWAbsenceModeState")
+    var pending by remember { mutableStateOf<PendingOrder?>(null) }
+    val enabled = !model.busy && !model.needsRefresh && !model.demo
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Eau chaude disponible", style = MaterialTheme.typography.titleMedium)
+            Text(remaining?.toString() ?: "—", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.displayLarge)
+            Text("Douches restantes estimées")
+            if (remaining != null && maximum != null && maximum > 0) {
+                LinearProgressIndicator(progress = { (remaining.toFloat()/maximum).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                Text("Capacité de référence : " + maximum + " douches")
+            }
+            HorizontalDivider()
+            Text("Sonde milieu : " + display("modbuslink:MiddleWaterTemperatureState", " °C"))
+            Text("Autre sonde : " + display("core:MiddleWaterTemperatureInState", " °C"))
+            Text("Consigne : " + display("core:TargetDHWTemperatureState", " °C"))
+            Text("Puissance électrique : " + display("modbuslink:PowerHeatElectricalState", " W"))
+            Text("Chauffe : " + when(state("core:HeatingStatusState")) { "off" -> "en veille"; "on" -> "active"; else -> "état non interprété" })
+            Text("Mode : " + when(mode) { "autoMode" -> "Auto"; "manualEcoActive" -> "Manuel éco"; "manualEcoInactive" -> "Manuel"; else -> "inconnu" })
+            Text("Boost : " + (boost ?: "—") + " · Absence : " + (absence ?: "—"))
+            Text("Disponibilité : " + if (heater.available == true) "en ligne" else "non confirmée")
+        }
+    }
+    val energy = model.devices.singleOrNull { it.type == "modbuslink:DHWCumulatedElectricalEnergyConsumptionMBLSystemDeviceSensor" }
+    if (energy != null) Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Compteurs énergétiques", style = MaterialTheme.typography.titleMedium)
+            Text("Total : " + (energy.state("core:ElectricEnergyConsumptionState") ?: "—"))
+            Text("Tarif 1 : " + (energy.state("core:ConsumptionTariff1State") ?: "—"))
+            Text("Tarif 2 : " + (energy.state("core:ConsumptionTariff2State") ?: "—"))
+            Text("Index bruts ; unité et correspondance tarifaire à confirmer.", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    Text("Pilotage expérimental", style = MaterialTheme.typography.titleLarge)
+    Text("Un ordre à la fois. Actualisez après chaque envoi pour vérifier l’état du ballon.", style = MaterialTheme.typography.bodySmall)
+    listOf("Auto" to "autoMode", "Manuel éco" to "manualEcoActive", "Manuel" to "manualEcoInactive").forEach { (label, value) ->
+        OutlinedButton(onClick = { pending = PendingOrder("setDHWMode", value, label) },
+            enabled = enabled && mode != value && validCommand(heater, "setDHWMode", value), modifier = Modifier.fillMaxWidth()) { Text(if (mode == value) label + " (actif)" else label) }
+    }
+    if (boost == "off" || boost == "on" || boost == "prog") {
+        val value = if (boost == "off") "on" else "off"
+        val label = if (value == "on") "Activer le Boost" else "Arrêter le Boost"
+        Button(onClick = { pending = PendingOrder("setBoostMode", value, label) },
+            enabled = enabled && validCommand(heater, "setBoostMode", value), modifier = Modifier.fillMaxWidth()) { Text(label) }
+    }
+    if (desired != null && minShower != null && maximum != null && minShower in 1..maximum && maximum <= 20) {
+        var selected by remember(desired) { mutableStateOf(desired.coerceIn(minShower, maximum)) }
+        Text("Douches demandées : " + selected)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { selected-- }, enabled = selected > minShower && enabled) { Text("−") }
+            OutlinedButton(onClick = { selected++ }, enabled = selected < maximum && enabled) { Text("+") }
+            Button(onClick = { pending = PendingOrder("setExpectedNumberOfShower", selected, selected.toString() + " douches") },
+                enabled = enabled && selected != desired && validCommand(heater, "setExpectedNumberOfShower", selected)) { Text("Appliquer") }
+        }
+    }
+    if (target != null && minTemp != null && maxTemp != null && minTemp in 40..maxTemp && maxTemp <= 80) {
+        var selected by remember(target) { mutableStateOf(target.coerceIn(minTemp, maxTemp)) }
+        Text("Consigne : " + selected + " °C")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { selected-- }, enabled = selected > minTemp && enabled) { Text("−") }
+            OutlinedButton(onClick = { selected++ }, enabled = selected < maxTemp && enabled) { Text("+") }
+            Button(onClick = { pending = PendingOrder("setTargetDHWTemperature", selected, "Consigne " + selected + " °C") },
+                enabled = enabled && selected != target && validCommand(heater, "setTargetDHWTemperature", selected)) { Text("Appliquer") }
+        }
+        Text("Réglage limité aux bornes déclarées par le ballon. Attention aux brûlures à température élevée.", style = MaterialTheme.typography.bodySmall)
+    }
+    if (pending != null) {
+        val order = pending!!
+        AlertDialog(onDismissRequest = { pending = null }, title = { Text("Confirmer la commande") },
+            text = { Text(order.label + " — envoyer cet ordre au chauffe-eau ?") },
+            confirmButton = { TextButton(onClick = { pending = null; model.send(order.command, order.value) }, enabled = enabled) { Text("Envoyer") } },
+            dismissButton = { TextButton(onClick = { pending = null }) { Text("Annuler") } })
     }
 }
