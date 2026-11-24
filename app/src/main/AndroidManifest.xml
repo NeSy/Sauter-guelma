@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <application android:label="Guelma Control" android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity android:name=".HobenActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
+        <receiver android:name=".HobenWidget" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/hoben_widget_info"/>
+        </receiver>
         <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

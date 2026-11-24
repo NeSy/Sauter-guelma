@@ -34,3 +34,6 @@ Apprentissage sur 30 jours complets, validation chronologique sur les 7 derniers
 
 ## V0.6.0 — refonte de l’interface
 Nouvelle navigation fixe Accueil / Planning / Analyse / Réglages, tableau de bord avec réserve animée, cartes de température, choix de mode, Boost et réglages manuels dans des dialogues. Diagnostics et index bruts dans un panneau technique replié. Démonstration visuelle sans communication ni commandes. Le moteur de pilotage, la validation des ordres, l’historique et la signature restent inchangés.
+
+## V0.7.0 — préparation Hoben H5
+Espace indépendant Hoben, favoris locaux nommés (température, durée), sélection du favori du widget Android. Le widget ouvre le détail, il n’envoie aucune commande. Diagnostic de transport TLS avec validation du certificat et du nom d’hôte, sans identifiant ni message applicatif. La connexion au poêle et les commandes restent verrouillées tant que le protocole et l’autorisation ne sont pas vérifiés. Aucun APK tiers ni secret inclus dans le dépôt.

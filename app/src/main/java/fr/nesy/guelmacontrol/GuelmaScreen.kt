@@ -64,6 +64,7 @@ private data class Order(val command:String,val value:Any,val label:String)
 
 @Composable
 internal fun GuelmaScreen(model:DiagnosticModel){
+    val context=LocalContext.current
     var tab by rememberSaveable{mutableStateOf(0)}
     var pending by remember{mutableStateOf<Order?>(null)}
     val nav=listOf(Nav("Accueil",Icons.Filled.Home),Nav("Planning",Icons.Filled.DateRange),Nav("Analyse",Icons.Filled.Info),Nav("Réglages",Icons.Filled.Settings))
@@ -83,6 +84,7 @@ internal fun GuelmaScreen(model:DiagnosticModel){
                     Text("Guelma Control",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
                     Text("Sauter Guelma 2 MP · 65 L",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                TextButton(onClick={context.startActivity(android.content.Intent(context,HobenActivity::class.java))}){Text("Hoben")}
                 if(model.connected&&!model.demo)IconButton(onClick={model.refresh()},enabled=!model.busy){Icon(Icons.Filled.Refresh,"Actualiser")}
             }
             if(model.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) else Spacer(Modifier.height(4.dp))
@@ -346,7 +348,7 @@ private fun SettingsView(model:DiagnosticModel,heater:Device?,onLogout:()->Unit)
             }
         }
     }
-    Text("Guelma Control 0.6.0 · Application indépendante",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Guelma Control 0.7.0 · Application indépendante",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
     if(logout)AlertDialog(onDismissRequest={logout=false},title={Text("Se déconnecter ?")},text={Text("La connexion mémorisée sera effacée et l’observation arrêtée. L’historique reste sur ce téléphone.")},confirmButton={TextButton(onClick={logout=false;model.logout();onLogout()}){Text("Déconnexion")}},dismissButton={TextButton(onClick={logout=false}){Text("Annuler")}})
 }
 internal fun demoDevices():List<Device> = listOf(Device(-1,-1,true,emptyList(),"Overkiz",HEATER_TYPE,listOf(
