@@ -86,7 +86,7 @@ internal fun TariffSettingsPanel() {
 internal fun VacationControls(heater:Device, enabled:Boolean, confirm:(Any,String)->Unit) {
     var days by remember{mutableStateOf(7)}
     val absent=heater.state("modbuslink:DHWAbsenceModeState")
-    Text("Vacances",style=MaterialTheme.typography.titleLarge)
+    Text("Mode absence",style=MaterialTheme.typography.titleMedium)
     if(absent=="on"||absent=="prog"){
         OutlinedButton(onClick={confirm("off","Terminer le mode absence")},enabled=enabled&&validCommand(heater,"setAbsenceMode","off")){Text("Terminer l’absence")}
     } else {

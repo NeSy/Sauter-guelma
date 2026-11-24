@@ -21,6 +21,7 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
     var lastAttempt by remember { mutableStateOf(0L) }
     var clearDialog by remember { mutableStateOf(false) }
     var period by remember { mutableStateOf(14) }
+    var section by remember { mutableStateOf(0) }
     LaunchedEffect(heater.historyKey, model.historyEnabled, period) {
         while (true) {
             rows = withContext(Dispatchers.IO) {
@@ -32,7 +33,10 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
         }
     }
     val stats = remember(rows) { analyzeHabits(rows) }
-    Card(Modifier.fillMaxWidth()) {
+    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        listOf("Habitudes","Courbes","Prévisions").forEachIndexed { index, label -> FilterChip(selected=section==index,onClick={section=index},label={Text(label)}) }
+    }
+    if(section==0) Card(Modifier.fillMaxWidth(),shape=androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Analyse des habitudes", style = MaterialTheme.typography.titleLarge)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -61,9 +65,11 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
             OutlinedButton(onClick = { clearDialog = true }) { Text("Effacer l’historique") }
         }
     }
-    PredictivePanel(heater, model.lastSync, model.historyEnabled)
-    AdvancedAnalysis(rows, heater.historyKey)
-    CollectionLogPanel()
+    if(section==2) PredictivePanel(heater, model.lastSync, model.historyEnabled)
+    if(section==1) {
+        Row(horizontalArrangement=Arrangement.spacedBy(4.dp)) { listOf(1,7,14,30,90).forEach { n -> FilterChip(selected=period==n,onClick={period=n},label={Text(n.toString()+"j")}) } }
+        AdvancedAnalysis(rows, heater.historyKey)
+    }
     if (clearDialog) AlertDialog(onDismissRequest = { clearDialog = false }, title = { Text("Effacer tous les relevés ?") },
         text = { Text("L’observation sera désactivée et les relevés locaux supprimés.") },
         confirmButton = { TextButton(onClick = { clearDialog = false; model.clearHistory(); rows = emptyList() }) { Text("Effacer") } },

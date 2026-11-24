@@ -31,3 +31,6 @@ Tentatives journalisées avant les appels réseau en premier plan, état WorkMan
 
 ## V0.5.0 — plan prédictif en mode conseil
 Apprentissage sur 30 jours complets, validation chronologique sur les 7 derniers jours, seuils de couverture et de récurrence, comparaison de l’erreur probabiliste avec une référence constante. Estimation prudente du temps de recharge à partir des variations de réserve en chauffe et marge de confort réglable. Plan des 24 prochaines heures exportable par copie. Aucune action automatique : le plan doit être validé sur des mesures réelles avant toute future commande autonome. Observation volontaire, signature et base de données inchangées.
+
+## V0.6.0 — refonte de l’interface
+Nouvelle navigation fixe Accueil / Planning / Analyse / Réglages, tableau de bord avec réserve animée, cartes de température, choix de mode, Boost et réglages manuels dans des dialogues. Diagnostics et index bruts dans un panneau technique replié. Démonstration visuelle sans communication ni commandes. Le moteur de pilotage, la validation des ordres, l’historique et la signature restent inchangés.
