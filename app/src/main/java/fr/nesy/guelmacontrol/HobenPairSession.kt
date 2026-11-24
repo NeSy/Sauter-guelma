@@ -32,12 +32,14 @@ internal sealed interface HobenPairResult {
     data class Failed(val message:String):HobenPairResult
 }
 internal class HobenPairSession(context:Context):AutoCloseable {
-    private val vault=CredentialVault(context.applicationContext,"hoben")
+    private val contextRef=context.applicationContext
+    private val vault=CredentialVault(contextRef,"hoben")
     private var socket:SSLSocket?=null
+    private var leased=false
     private var userId:String?=null
     private var challengeTime=0L
     fun hasSaved()=vault.hasCredentials()
-    fun forget(){close();vault.clear()}
+    fun forget(){close();HobenObservation.configure(contextRef,false);vault.clear();HobenObservation.clearLive()}
     @Synchronized fun open(raw:String?,remember:Boolean,command:HobenOverride?=null):HobenPairResult {
         close()
         val saved=vault.load()
@@ -45,6 +47,8 @@ internal class HobenPairSession(context:Context):AutoCloseable {
         if(id==null)return HobenPairResult.Failed("Identifiant MyHOBEN invalide ou non mémorisé.")
         val deviceId=saved?.takeIf{it.first==id}?.second?.let{normalizeHobenId(it)}
             ?:UUID.randomUUID().toString().replace("-","")
+        if(!sessionGate.tryAcquire())return HobenPairResult.Failed("Une connexion Hoben est déjà en cours.")
+        leased=true
         return try {
             val tcp=Socket()
             try {
@@ -105,11 +109,12 @@ internal class HobenPairSession(context:Context):AutoCloseable {
                     HobenPairResult.Opened(identity,readStatus="Variante non validée pour la lecture.")
                 }else{
                     try {
-                        val snapshot=readHobenSnapshot(socket!!,input)
+                        val key=hobenDeviceKey(id)
+                        val snapshot=readHobenSnapshot(socket!!,input).copy(deviceKey=key)
                         if(command==null)HobenPairResult.Opened(identity,snapshot,"Lecture réussie.")
                         else {
                             val outcome=applyHobenOverride(socket!!,input,snapshot,command)
-                            HobenPairResult.Opened(identity,outcome.snapshot,outcome.message)
+                            HobenPairResult.Opened(identity,outcome.snapshot?.copy(deviceKey=key),outcome.message)
                         }
                     } catch(e:Exception){
                         HobenPairResult.Opened(identity,readStatus=when(e){
@@ -130,5 +135,6 @@ internal class HobenPairSession(context:Context):AutoCloseable {
         is java.io.EOFException->"Connexion fermée par le serveur."
         else->"Connexion ou enregistrement local indisponible."
     })
-    override fun close(){try{socket?.close()}catch(_:Exception){};socket=null;userId=null;challengeTime=0}
+    @Synchronized override fun close(){try{socket?.close()}catch(_:Exception){};socket=null;userId=null;challengeTime=0;if(leased){leased=false;sessionGate.release()}}
+    companion object{private val sessionGate=java.util.concurrent.Semaphore(1)}
 }

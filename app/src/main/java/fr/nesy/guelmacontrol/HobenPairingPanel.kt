@@ -31,6 +31,7 @@ internal fun HobenPairingPanel(blocked:Boolean,onBusy:(Boolean)->Unit,onState:(H
     fun handle(result:HobenPairResult){
         challenge=result==HobenPairResult.PinRequired
         onState((result as? HobenPairResult.Opened)?.state)
+        (result as? HobenPairResult.Opened)?.state?.let{reading->scope.launch(Dispatchers.IO){HobenObservation.accept(c,reading,"Hoben · lecture manuelle")}}
         status=when(result){
             HobenPairResult.PinRequired->"Vérifiez l’écran du H5 : saisissez le code d’autorisation affiché."
             is HobenPairResult.Opened->"Identification confirmée · type "+result.identity.type+" · révision "+result.identity.revision+" · logiciel "+result.identity.major+"."+result.identity.minor+"\n"+result.readStatus
@@ -39,7 +40,7 @@ internal fun HobenPairingPanel(blocked:Boolean,onBusy:(Boolean)->Unit,onState:(H
         if(result is HobenPairResult.Opened)id=""
         saved=session.hasSaved()
     }
-    LaunchedEffect(busy){onBusy(busy)}
+    LaunchedEffect(busy,challenge){onBusy(busy||challenge)}
     DisposableEffect(session){onDispose{session.close()}}
     LaunchedEffect(challenge){
         if(challenge){delay(55000);if(!busy){session.close();challenge=false;pin="";status="Demande expirée. Relancez la connexion."}}

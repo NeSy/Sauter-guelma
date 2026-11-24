@@ -87,6 +87,14 @@ internal object HobenOverrideGateway{
             if(snapshot.timestamp>=p.getLong("since",Long.MAX_VALUE))p.edit().remove("pending").remove("since").commit()
         }finally{gate.unlock()}
     }
+    fun read(context:Context):HobenPairResult{
+        if(!gate.tryLock())return HobenPairResult.Failed("Commande en cours : lecture reportée.")
+        try{
+            val result=HobenPairSession(context).use{it.open(null,true)}
+            (result as? HobenPairResult.Opened)?.state?.let{noteRead(context,it)}
+            return result
+        }finally{gate.unlock()}
+    }
     fun execute(context:Context,order:HobenOverride):HobenPairResult{
         if(!gate.tryLock())return HobenPairResult.Failed("Une commande est déjà en cours. Aucun nouvel ordre envoyé.")
         try{
@@ -100,6 +108,7 @@ internal object HobenOverrideGateway{
             }else{
                 p.edit().putLong("since",System.currentTimeMillis()).commit()
             }
+            (result as? HobenPairResult.Opened)?.state?.let{HobenObservation.accept(context,it,"Hoben · commande")}
             return result
         }catch(_:Exception){
             prefs(context).edit().putLong("since",System.currentTimeMillis()).commit()

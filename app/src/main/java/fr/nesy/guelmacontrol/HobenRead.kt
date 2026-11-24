@@ -9,7 +9,7 @@ internal data class HobenSnapshot(
     val ambient:Double?, val target:Double?, val power:Int?, val mode:Int,
     val state:Int,val vent:Int,val onOff:Int,val activeOverride:Boolean,
     val scheduledOverride:Boolean,val overrideTemp:Double?,val overrideMinutes:Int,
-    val delayMinutes:Int,val faults:Int,val timestamp:Long,val info:Int=0
+    val delayMinutes:Int,val faults:Int,val timestamp:Long,val info:Int=0,val deviceKey:String=""
 ){
     val modeLabel:String get()=when(mode){0->"Habitation";1->"Magasin";2->"Manuel";else->"Mode non reconnu ($mode)"}
     val stateLabel:String get()=when(state){0->"En attente";1->"Arrêt";2->"Démarrage";3->"Stabilisation";4->"Modulation";5->"Fin de combustion";6->"Démarrage standard";7->"Redémarrage après coupure";8->"Gestion combustion";else->"État non reconnu ($state)"}

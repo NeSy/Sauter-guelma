@@ -138,6 +138,10 @@ private fun HobenView(initial:String?,back:()->Unit){
     var busy by remember{mutableStateOf(false)}
     var status by remember{mutableStateOf("Non testé")}
     var snapshot by remember{mutableStateOf<HobenSnapshot?>(null)}
+    val live by HobenObservation.live.collectAsState()
+    var auto by remember{mutableStateOf(HobenObservation.auto(c))}
+    var observing by remember{mutableStateOf(HobenObservation.enabled(c))}
+    var monitorBusy by remember{mutableStateOf(false)}
     var commandBusy by remember{mutableStateOf(false)}
     var pairBusy by remember{mutableStateOf(false)}
     var commandStatus by remember{mutableStateOf("")}
@@ -147,7 +151,9 @@ private fun HobenView(initial:String?,back:()->Unit){
     val scope=rememberCoroutineScope()
     val flame=Color(0xFFE58A43)
     val savedPairing=CredentialVault(c,"hoben").hasCredentials()
-    val canCommand=savedPairing&&!commandBusy&&!pairBusy&&!uncertain
+    val canCommand=savedPairing&&!commandBusy&&!pairBusy&&!uncertain&&!monitorBusy
+    HobenMonitor(active=auto&&savedPairing&&!commandBusy&&!pairBusy,onBusy={monitorBusy=it})
+    LaunchedEffect(live){if(live!=null){snapshot=live;uncertain=HobenOverrideGateway.needsRead(c)}}
     fun execute(order:HobenOverride){
         if(!canCommand)return
         commandBusy=true;details=null;cancelConfirm=false;commandStatus="Vérification du poêle…";snapshot=null
@@ -183,7 +189,7 @@ private fun HobenView(initial:String?,back:()->Unit){
                         Text(if(reading.activeOverride)"Dérogation active"else if(reading.scheduledOverride)"Dérogation programmée"else "Pas de dérogation signalée",color=Color(0xFFF3DCCB))
                         if(reading.activeOverride||reading.scheduledOverride)Text("Dérogation : "+(reading.overrideTemp?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—")+" · durée remontée "+reading.overrideMinutes+" min",color=Color(0xFFF3DCCB))
                         if(reading.faults!=0)Text("Défaut signalé : consultez MyHOBEN ou le poêle.",color=Color(0xFFFFC28C))
-                        Text("Lecture ponctuelle à "+java.text.DateFormat.getTimeInstance().format(java.util.Date(reading.timestamp)),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelSmall)
+                        Text("Dernier relevé à "+java.text.DateFormat.getTimeInstance().format(java.util.Date(reading.timestamp)),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -209,7 +215,8 @@ private fun HobenView(initial:String?,back:()->Unit){
                 }
             }
             if(list.isEmpty())Text("Ajoutez votre première dérogation favorite.")
-            HobenPairingPanel(commandBusy,{pairBusy=it}){snapshot=it;if(it!=null){HobenOverrideGateway.noteRead(c,it);uncertain=HobenOverrideGateway.needsRead(c)}}
+            HobenPairingPanel(commandBusy||monitorBusy,{pairBusy=it}){snapshot=it;if(it!=null){HobenOverrideGateway.noteRead(c,it);uncertain=HobenOverrideGateway.needsRead(c)}else if(!CredentialVault(c,"hoben").hasCredentials()){observing=false}}
+            HobenHistoryPanel(observing,{v->HobenObservation.configure(c,v);observing=v},auto,{v->HobenObservation.setAuto(c,v);auto=v},savedPairing,snapshot?.timestamp?:0L)
             Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text("Widgets Android · 1 × 1",style=MaterialTheme.typography.titleMedium)

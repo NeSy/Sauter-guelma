@@ -67,12 +67,13 @@ internal fun GuelmaScreen(model:DiagnosticModel){
     val context=LocalContext.current
     var tab by rememberSaveable{mutableStateOf(0)}
     var pending by remember{mutableStateOf<Order?>(null)}
-    val nav=listOf(Nav("Accueil",Icons.Filled.Home),Nav("Planning",Icons.Filled.DateRange),Nav("Analyse",Icons.Filled.Info),Nav("Réglages",Icons.Filled.Settings))
+    val nav=listOf(Nav("Accueil",Icons.Filled.Home),Nav("Ballon",Icons.Filled.Favorite),Nav("Planning",Icons.Filled.DateRange),Nav("Analyse",Icons.Filled.Info),Nav("Réglages",Icons.Filled.Settings))
+    HobenMonitor(active=tab==0&&!model.demo,onBusy={})
     val heater=model.devices.singleOrNull{it.type==HEATER_TYPE}
     val enabled=model.connected&&!model.demo&&!model.busy&&!model.needsRefresh&&heater?.available==true
     val request:(String,Any,String)->Unit={cmd,value,label->if(enabled)pending=Order(cmd,value,label)}
     Scaffold(containerColor=MaterialTheme.colorScheme.background,bottomBar={
-        if(model.connected)NavigationBar(containerColor=MaterialTheme.colorScheme.surface){
+        NavigationBar(containerColor=MaterialTheme.colorScheme.surface){
             nav.forEachIndexed{i,n->NavigationBarItem(selected=tab==i,onClick={tab=i},icon={Icon(n.icon,null)},label={Text(n.name)})}
         }
     }){padding->
@@ -81,16 +82,16 @@ internal fun GuelmaScreen(model:DiagnosticModel){
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(15.dp)).background(Brush.linearGradient(listOf(Color(0xFF005B9D),Aqua))),contentAlignment=Alignment.Center){WaterGlyph(Modifier.size(26.dp))}
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)){
-                    Text("Guelma Control",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-                    Text("Sauter Guelma 2 MP · 65 L",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Home Energy Control",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                    Text("Maison · Eau chaude et chauffage",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                TextButton(onClick={context.startActivity(android.content.Intent(context,HobenActivity::class.java))}){Text("Hoben")}
                 if(model.connected&&!model.demo)IconButton(onClick={model.refresh()},enabled=!model.busy){Icon(Icons.Filled.Refresh,"Actualiser")}
             }
             if(model.busy) LinearProgressIndicator(Modifier.fillMaxWidth()) else Spacer(Modifier.height(4.dp))
             key(tab,model.connected){
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=18.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
-                    if(!model.connected) LoginView(model){tab=0}
+                    if(tab==0)HouseOverview(model,heater,{tab=1},{context.startActivity(android.content.Intent(context,HobenActivity::class.java))})
+                    else if(!model.connected) LoginView(model){tab=1}
                     else {
                         if(model.demo) Surface(color=MaterialTheme.colorScheme.secondaryContainer,shape=RoundedCornerShape(16.dp)){
                             Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){Text("Aperçu démo · aucune commande",Modifier.weight(1f));TextButton(onClick={model.logout();tab=0}){Text("Quitter")}}
@@ -99,14 +100,14 @@ internal fun GuelmaScreen(model:DiagnosticModel){
                             Text(model.actionMessage,Modifier.fillMaxWidth().padding(12.dp),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                         when(tab){
-                            0->if(heater!=null) HomeView(heater,model,enabled,request,{tab=1}) else EmptyHeater()
-                            1->{SectionTitle("Planning","Organisez votre réserve d’eau chaude")
+                            1->if(heater!=null) HomeView(heater,model,enabled,request,{tab=2}) else EmptyHeater()
+                            2->{SectionTitle("Planning","Organisez votre réserve d’eau chaude")
                                 if(heater!=null){PremiumCard{VacationControls(heater,enabled){v,l->request("setAbsenceMode",v,l)}}
                                     if(!model.demo)PredictivePanel(heater,model.lastSync,model.historyEnabled)
                                     else Text("Les recommandations apparaîtront après apprentissage.")
                                 }else EmptyHeater()
                             }
-                            2->{SectionTitle("Analyse","Comprendre et anticiper vos usages")
+                            3->{SectionTitle("Analyse","Comprendre et anticiper vos usages")
                                 if(heater!=null&&!model.demo)HistoryPanel(heater,model)else Text("Les données réelles sont nécessaires pour l’analyse.")
                             }
                             else->SettingsView(model,heater){tab=0}
