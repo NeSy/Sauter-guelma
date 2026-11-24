@@ -43,3 +43,6 @@ Widget compact 1×1, température et durée uniquement, association indépendant
 
 ## V0.7.2 — appairage MyHOBEN expérimental
 D’après les méthodes ConnectToServer, SendDeviceAuth et ManageOpened de MyHOBEN 2.2 : ouverture TLS avec identifiant fourni par le propriétaire, identifiant client propre à cette installation, demande éventuelle du code affiché sur le poêle. Lecture de la réponse d’identification (type, révision, version) uniquement. Aucun registre de commande, aucun réglage de chauffe, aucune tentative automatique ni contournement d’autorisation. Identifiant mémorisé uniquement dans un coffre Android Keystore distinct de Cozytouch, après réponse positive. Validation réseau sur matériel réel requise.
+
+## V0.7.3 — Hoben H5 lecture seule
+Source vérifiée : HobenCore de MyHOBEN 2.2, StoveFactory.Create associe type 5 à StoveV4 ; GetRegApplicatif appelle Modbus TCP fonction 04, unité 1, 20 registres à partir de 1024, transaction 65535, préfixe 13 (GetApplicatif). Décodage des réponses 14/7 et filtrage des transactions. Températures signées en dixièmes, états, ventilation, puissance, informations de dérogation. Appairage conservé. Lecture ponctuelle uniquement, aucun registre écrit, aucune commande de chauffe. Réponse réelle à valider sur H5 type 5 révision 0 logiciel 8.x.

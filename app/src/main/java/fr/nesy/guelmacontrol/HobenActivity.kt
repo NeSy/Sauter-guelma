@@ -129,6 +129,7 @@ private fun HobenView(initial:String?,back:()->Unit){
     var remove by remember{mutableStateOf<HobenFavorite?>(null)}
     var busy by remember{mutableStateOf(false)}
     var status by remember{mutableStateOf("Non testé")}
+    var snapshot by remember{mutableStateOf<HobenSnapshot?>(null)}
     val scope=rememberCoroutineScope()
     val flame=Color(0xFFE58A43)
     Scaffold(containerColor=MaterialTheme.colorScheme.background){padding->
@@ -138,8 +139,20 @@ private fun HobenView(initial:String?,back:()->Unit){
             Surface(shape=RoundedCornerShape(24.dp),color=Color(0xFF39291F)){
                 Column(Modifier.fillMaxWidth().padding(20.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
                     Text("CHAUFFAGE · GRANULÉS",color=flame,style=MaterialTheme.typography.labelMedium)
-                    Text("Connexion à préparer",color=Color.White,style=MaterialTheme.typography.titleLarge)
-                    Text("Favoris disponibles hors ligne. Aucune température réelle ou commande du poêle pour le moment.",color=Color(0xFFF3DCCB),style=MaterialTheme.typography.bodyMedium)
+                    val reading=snapshot
+                    if(reading==null){
+                        Text("En attente d’une lecture",color=Color.White,style=MaterialTheme.typography.titleLarge)
+                        Text("Connectez votre poêle ci-dessous. Favoris locaux, commandes verrouillées.",color=Color(0xFFF3DCCB),style=MaterialTheme.typography.bodyMedium)
+                    }else{
+                        Text(reading.ambient?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—",color=Color.White,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.Bold)
+                        Text("Température ambiante · consigne "+(reading.target?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—"),color=Color(0xFFF3DCCB))
+                        Text(reading.stateLabel+" · "+reading.modeLabel,color=Color(0xFFF3DCCB))
+                        Text("Puissance "+(reading.power?.let{"$it %"}?:"—")+" · Ventilation "+reading.ventLabel,color=Color(0xFFF3DCCB))
+                        Text(if(reading.activeOverride)"Dérogation active"else if(reading.scheduledOverride)"Dérogation programmée"else "Pas de dérogation signalée",color=Color(0xFFF3DCCB))
+                        if(reading.activeOverride||reading.scheduledOverride)Text("Dérogation : "+(reading.overrideTemp?.let{String.format(java.util.Locale.FRANCE,"%.1f °C",it)}?:"—")+" · durée remontée "+reading.overrideMinutes+" min",color=Color(0xFFF3DCCB))
+                        if(reading.faults!=0)Text("Défaut signalé : consultez MyHOBEN ou le poêle.",color=Color(0xFFFFC28C))
+                        Text("Lecture ponctuelle à "+java.text.DateFormat.getTimeInstance().format(java.util.Date(reading.timestamp)),color=Color(0xFFF3DCCB),style=MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
             Row(verticalAlignment=Alignment.CenterVertically){
@@ -162,7 +175,7 @@ private fun HobenView(initial:String?,back:()->Unit){
                 }
             }
             if(list.isEmpty())Text("Ajoutez votre première dérogation favorite.")
-            HobenPairingPanel()
+            HobenPairingPanel{snapshot=it}
             Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text("Widgets Android · 1 × 1",style=MaterialTheme.typography.titleMedium)

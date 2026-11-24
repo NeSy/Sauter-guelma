@@ -27,7 +27,7 @@ internal fun hobenPinFrame(pin:Int):ByteArray {
 
 internal data class HobenIdentity(val type:Int,val revision:Int,val major:Int,val minor:Int)
 internal sealed interface HobenPairResult {
-    data class Opened(val identity:HobenIdentity):HobenPairResult
+    data class Opened(val identity:HobenIdentity,val state:HobenSnapshot?=null,val readStatus:String=""):HobenPairResult
     data object PinRequired:HobenPairResult
     data class Failed(val message:String):HobenPairResult
 }
@@ -100,7 +100,22 @@ internal class HobenPairSession(context:Context):AutoCloseable {
                 val id=userId
                 if(guid==null||id==null)return HobenPairResult.Failed("Réponse d’identification incomplète ou non reconnue.")
                 if(remember)vault.save(id,guid)
-                HobenPairResult.Opened(HobenIdentity(unsigned(8),unsigned(7),unsigned(10),unsigned(9)))
+                val identity=HobenIdentity(unsigned(8),unsigned(7),unsigned(10),unsigned(9))
+                if(identity.type!=5||identity.revision!=0||identity.major!=8) {
+                    HobenPairResult.Opened(identity,readStatus="Variante non validée pour la lecture.")
+                }else{
+                    try {
+                        val snapshot=readHobenSnapshot(socket!!,input)
+                        HobenPairResult.Opened(identity,snapshot,"Lecture réussie.")
+                    } catch(e:Exception){
+                        HobenPairResult.Opened(identity,readStatus=when(e){
+                            is java.net.SocketTimeoutException->"Délai de lecture dépassé."
+                            is java.io.EOFException->"Connexion fermée pendant la lecture."
+                            is HobenReadException->e.message.orEmpty()
+                            else->"Lecture impossible."
+                        })
+                    }
+                }
             }
             else->HobenPairResult.Failed("Réponse non reconnue : type "+header+". Aucun ordre envoyé.")
         }
