@@ -1,6 +1,8 @@
 package fr.nesy.guelmacontrol
 
 import android.os.Bundle
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -29,7 +31,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-class DiagnosticModel : ViewModel() {
+class DiagnosticModel(application: Application) : AndroidViewModel(application) {
+    private val vault = CredentialVault(application)
     private val api = CozytouchApi()
     var devices by mutableStateOf<List<Device>>(emptyList()); private set
     var actionMessage by mutableStateOf(""); private set
@@ -39,8 +42,37 @@ class DiagnosticModel : ViewModel() {
     var demo by mutableStateOf(false); private set
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf(""); private set
-    fun login(email: String, password: String) { actionMessage = ""; needsRefresh = false; runRequest { api.login(email, password) } }
-    fun refresh() { if (connected && !demo) runRequest { api.readDevices() } }
+    var remembered by mutableStateOf(vault.hasCredentials()); private set
+    init { if (remembered) reconnect() }
+
+    fun login(email: String, password: String, rememberConnection: Boolean) {
+        if (busy) return
+        actionMessage = ""; needsRefresh = false
+        runRequest {
+            val result = api.login(email, password)
+            if (rememberConnection) {
+                try { vault.save(email.trim(), password) }
+                catch (_: Exception) { vault.clear() }
+            } else vault.clear()
+            result
+        }
+    }
+    fun reconnect() {
+        if (busy) return
+        runRequest {
+            val saved = vault.load() ?: throw ApiException("Identifiants indisponibles. Reconnectez-vous manuellement.")
+            api.login(saved.first, saved.second)
+        }
+    }
+    fun forget() { if (!busy) { vault.clear(); remembered = false } }
+    fun refresh() {
+        if (connected && !demo) runRequest {
+            if (api.sessionExpired() && vault.hasCredentials()) {
+                val saved = vault.load() ?: throw ApiException("Reconnectez-vous.")
+                api.login(saved.first, saved.second)
+            } else api.readDevices()
+        }
+    }
     private fun runRequest(action: () -> List<Device>) {
         if (busy) return
         busy = true; error = ""; demo = false
@@ -54,7 +86,7 @@ class DiagnosticModel : ViewModel() {
             catch (e: Exception) {
                 api.logout(); connected = false; devices = emptyList()
                 error = if (e is ApiException) e.message.orEmpty() else "Connexion impossible ou réponse inattendue. Vérifiez votre réseau."
-            } finally { busy = false }
+            } finally { remembered = vault.hasCredentials(); busy = false }
         }
     }
     fun send(command: String, value: Any) {
@@ -72,7 +104,7 @@ class DiagnosticModel : ViewModel() {
         api.logout(); summary = ""; actionMessage = ""; needsRefresh = false; demo = true; connected = true; error = ""
         devices = listOf(Device(0, 0, true, listOf(Capability(1, "75"), Capability(2, "true"), Capability(3, "2"))))
     }
-    fun logout() { if (!busy) { api.logout(); summary = ""; actionMessage = ""; needsRefresh = false; connected = false; demo = false; devices = emptyList(); error = "" } }
+    fun logout() { if (!busy) { if (!demo) forget(); api.logout(); summary = ""; actionMessage = ""; needsRefresh = false; connected = false; demo = false; devices = emptyList(); error = "" } }
     override fun onCleared() { api.logout(); super.onCleared() }
 }
 
@@ -80,13 +112,14 @@ class DiagnosticModel : ViewModel() {
 fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var rememberConnection by remember { mutableStateOf(true) }
     var copied by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Guelma Control", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Sauter Guelma 2 MP · 65 L · V0.2.0")
+            Text("Sauter Guelma 2 MP · 65 L · V0.2.1")
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Connexion Cozytouch", style = MaterialTheme.typography.titleLarge)
@@ -96,9 +129,17 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
             if (!model.connected) {
                 OutlinedTextField(email, { email = it }, label = { Text("E-mail Cozytouch") }, singleLine = true, enabled = !model.busy, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(password, { password = it }, label = { Text("Mot de passe") }, singleLine = true, enabled = !model.busy, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                Button(onClick = { model.login(email, password); password = ""; copied = false }, enabled = !model.busy && email.isNotBlank() && password.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Connecter mon chauffe-eau") }
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(checked = rememberConnection, onCheckedChange = { rememberConnection = it }, enabled = !model.busy)
+                    Text("Mémoriser ma connexion")
+                }
+                if (model.remembered) {
+                    OutlinedButton(onClick = { model.reconnect() }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Utiliser ma connexion enregistrée") }
+                    TextButton(onClick = { model.forget() }, enabled = !model.busy) { Text("Oublier les identifiants") }
+                }
+                Button(onClick = { model.login(email, password, rememberConnection); password = ""; copied = false }, enabled = !model.busy && email.isNotBlank() && password.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text("Connecter mon chauffe-eau") }
                 OutlinedButton(onClick = { password = ""; email = ""; model.showDemo(); copied = false }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Essayer le mode démo") }
-                Text("API expérimentale. Mot de passe non enregistré. Les identifiants sont transmis uniquement au service Cozytouch via HTTPS.", style = MaterialTheme.typography.bodySmall)
+                Text("Si la mémorisation est activée, les identifiants sont chiffrés sur ce téléphone avec Android Keystore. Ils ne sont transmis qu’à Cozytouch via HTTPS.", style = MaterialTheme.typography.bodySmall)
             } else {
                 Text(model.devices.size.toString() + " appareil(s) détecté(s)", style = MaterialTheme.typography.titleLarge)
                 if (!model.demo && model.summary.isNotBlank()) Text(model.summary, style = MaterialTheme.typography.bodySmall)
@@ -129,7 +170,8 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                 if (!model.demo) Button(onClick = { model.refresh(); copied = false }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text("Actualiser") }
                 Text("Le rapport ne contient pas les noms, adresses, jetons ou numéros de série. Relisez les valeurs numériques avant de partager.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = { clipboard.setText(AnnotatedString(diagnosticReport(model.devices, model.demo, model.summary))); copied = true }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Text(if (copied) "Rapport copié" else "Copier le diagnostic") }
-                TextButton(onClick = { model.logout(); email = ""; password = ""; copied = false }, enabled = !model.busy) { Text("Déconnexion") }
+                if (model.remembered && !model.demo) Text("Connexion mémorisée sur cet appareil.", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { model.logout(); email = ""; password = ""; copied = false }, enabled = !model.busy) { Text(if (model.demo) "Quitter la démo" else "Déconnexion et oubli des identifiants") }
             }
             if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (model.error.isNotBlank()) Text(model.error, color = MaterialTheme.colorScheme.error)

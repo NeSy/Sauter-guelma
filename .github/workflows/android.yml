@@ -23,10 +23,36 @@ jobs:
           packages: "platform-tools platforms;android-35 build-tools;35.0.0"
       - name: Verify Android SDK
         run: sdkmanager --version
+      - name: Prepare stable signing key
+        env:
+          SIGNING_BUNDLE: ${{ secrets.ANDROID_SIGNING_BUNDLE }}
+        run: |
+          python3 - <<'PY'
+          import os, json, base64, pathlib
+          raw = os.environ.get("SIGNING_BUNDLE", "")
+          if not raw:
+              raise SystemExit("Configure the ANDROID_SIGNING_BUNDLE repository Actions secret before building.")
+          bundle = json.loads(raw)
+          password = bundle["password"]
+          if not password or "\n" in password or "\r" in password:
+              raise SystemExit("Invalid signing bundle")
+          print("::add-mask::" + password)
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "guelma.p12"
+          path.write_bytes(base64.b64decode(bundle["keystore_b64"], validate=True))
+          path.chmod(0o600)
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write("GUELMA_KEYSTORE=" + str(path) + "\n")
+              env.write("GUELMA_KEYSTORE_PASSWORD=" + password + "\n")
+          PY
       - name: Build and test
-        run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon
+        run: gradle :app:testDebugUnitTest :app:assembleRelease --no-daemon
+      - name: Verify signed APK
+        run: '"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk'
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/guelma.p12"
       - uses: actions/upload-artifact@v4
         with:
-          name: Guelma-Control-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Guelma-Control
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

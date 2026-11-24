@@ -38,6 +38,7 @@ internal class CozytouchApi {
         expiresAt = SystemClock.elapsedRealtime() + response.optLong("expires_in", 3600).coerceIn(60, 86400) * 1000 - 30000
         return try { readDevices() } catch (e: Exception) { logout(); throw e }
     }
+    fun sessionExpired(): Boolean = token == null || SystemClock.elapsedRealtime() >= expiresAt
     fun readDevices(): List<Device> {
         val access = token ?: throw ApiException("Reconnectez-vous.")
         if (SystemClock.elapsedRealtime() >= expiresAt) { logout(); throw ApiException("Session expirée. Reconnectez-vous.") }
@@ -185,7 +186,7 @@ internal fun diagnosticValue(value: Any?): String {
     return "masqué (texte ou structure)"
 }
 internal fun diagnosticReport(devices: List<Device>, demo: Boolean, summary: String = ""): String = buildString {
-    appendLine("Guelma Control 0.2.0 — " + if (demo) "DÉMO" else "diagnostic")
+    appendLine("Guelma Control 0.2.1 — " + if (demo) "DÉMO" else "diagnostic")
     if (!demo && summary.isNotBlank()) appendLine(summary)
     appendLine("Appareils détectés : " + devices.size)
     devices.forEachIndexed { index, device ->

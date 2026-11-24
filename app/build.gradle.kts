@@ -10,8 +10,21 @@ android {
         applicationId = "fr.nesy.guelmacontrol"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.2.0"
+        versionCode = 4
+        versionName = "0.2.1"
+    }
+    val signingPath = System.getenv("GUELMA_KEYSTORE")
+    if (signingPath != null) {
+        signingConfigs {
+            create("stable") {
+                storeFile = file(signingPath)
+                storeType = "PKCS12"
+                storePassword = System.getenv("GUELMA_KEYSTORE_PASSWORD")
+                keyAlias = "guelma"
+                keyPassword = System.getenv("GUELMA_KEYSTORE_PASSWORD")
+            }
+        }
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("stable")
     }
     buildFeatures { compose = true }
     compileOptions {

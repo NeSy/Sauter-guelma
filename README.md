@@ -9,5 +9,10 @@ Commandes limitées à un unique composant compatible disponible, à sa liste de
 
 API non officielle ; commandes à valider sur matériel réel. Références : https://github.com/gduteil/cozytouch ; https://github.com/NicolasYDDER/homey-cozytouch ; https://github.com/home-assistant/core/blob/dev/homeassistant/components/overkiz/water_heater/atlantic_domestic_hot_water_production_mlb_component.py .
 
+## V0.2.1 — mises à jour et connexion mémorisée
+L’option de mémorisation chiffre les identifiants avec AES-GCM et une clé Android Keystore non exportable. La reconnexion est tentée à l’ouverture ; la déconnexion explicite efface les identifiants. Aucun mot de passe dans GitHub.
+
+Configurer une seule fois le secret GitHub Actions `ANDROID_SIGNING_BUNDLE` (JSON contenant `keystore_b64` et `password`, clé PKCS12 alias guelma). Conserver une sauvegarde privée de cette clé. Ne jamais la committer, la publier en artifact ou la remplacer entre versions. Le workflow échoue si ce secret manque, pour éviter de publier un APK avec une signature différente. La première migration depuis un APK debug nécessite une dernière désinstallation. Les versions suivantes signées avec cette même clé peuvent se mettre à jour en conservant les données.
+
 ## Compiler
-JDK 17, Android SDK 35, Gradle 8.9. Actions > Android APK > Artifacts > Guelma-Control-debug. Décompresser et installer l'APK. Android 8 minimum. Signature debug susceptible de changer entre builds ; désinstaller l'ancienne version si nécessaire. Identifiants et jetons en mémoire seulement.
+JDK 17, Android SDK 35, Gradle 8.9. Actions > Android APK > Artifacts > Guelma-Control. Décompresser et installer l'APK. Android 8 minimum. Signature stable en CI.
