@@ -149,7 +149,7 @@ internal fun AdvancedAnalysis(rows:List<Sample>,key:String) {
                 val kwh=total/1000.0
                 Text(String.format(java.util.Locale.FRANCE,"%.2f kWh observés",kwh))
                 val cost=if(!tariff.dual) tariff.base?.let{it*kwh} else {
-                    if(energy.all{it.t1!=null && it.t2!=null && it.t1!!+it.t2!!==it.delta} && tariff.t1!=null && tariff.t2!=null)
+                    if(energy.all{it.t1 != null && it.t2 != null && (it.t1 + it.t2) == it.delta} && tariff.t1!=null && tariff.t2!=null)
                         energy.sumOf{it.t1!!}/1000.0*tariff.t1+energy.sumOf{it.t2!!}/1000.0*tariff.t2 else null
                 }
                 Text(cost?.let{String.format(java.util.Locale.FRANCE,"%.2f € (hors abonnement)",it)}?:"Coût indisponible : tarifs ou répartition incomplets.")
