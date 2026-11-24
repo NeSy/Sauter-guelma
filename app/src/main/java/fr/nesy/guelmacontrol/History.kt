@@ -36,24 +36,30 @@ internal object HistorySettings {
 class HistoryWorker(context: Context, params: WorkerParameters): CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         if (!HistorySettings.enabled(applicationContext)) return@withContext Result.success()
+        val started = System.currentTimeMillis()
+        val id = CollectionLog.start(applicationContext, "Arrière-plan", started)
+        var outcome = "Interrompu"
         try {
             CloudGate.mutex.withLock {
-                if (!HistorySettings.enabled(applicationContext)) return@withLock
+                if (!HistorySettings.enabled(applicationContext)) { outcome = "Observation arrêtée"; return@withLock }
                 val vault = CredentialVault(applicationContext)
                 val saved = vault.load()
                 if (saved == null) {
-                    HistorySettings.status(applicationContext, "Connexion mémorisée indisponible")
+                    outcome = "Connexion mémorisée indisponible"
+                    HistorySettings.status(applicationContext, outcome)
                     return@withLock
                 }
                 val api = CozytouchApi()
                 try {
                     val devices = api.login(saved.first, saved.second)
                     val recorded = HistoryStore(applicationContext).use { it.record(devices) }
-                    HistorySettings.status(applicationContext, if (recorded) "Relevé enregistré" else "Pas de nouvelle mesure exploitable")
+                    outcome = if (recorded) "Relevé enregistré" else "Pas de nouvelle mesure exploitable"
+                    HistorySettings.status(applicationContext, outcome)
                 } finally { api.logout() }
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (_: Exception) { HistorySettings.status(applicationContext, "Relevé indisponible ; nouvel essai au prochain passage") }
+        catch (e: Exception) { outcome = if (e is ApiException) e.message.orEmpty() else "Erreur réseau ou lecture"; HistorySettings.status(applicationContext, outcome) }
+        finally { CollectionLog.finish(applicationContext,id,outcome) }
         // No immediate retries: keep API traffic bounded.
         Result.success()
     }
@@ -62,13 +68,13 @@ class HistoryWorker(context: Context, params: WorkerParameters): CoroutineWorker
 internal data class Sample(
     val time: Long, val showers: Int?, val t1: Double?, val t2: Double?,
     val target: Double?, val power: Double?, val energy: Long?,
-    val mode: String?, val boost: String?, val absence: String?, val heating: String?
+    val mode: String?, val boost: String?, val absence: String?, val heating: String?, val tariff1: Long? = null, val tariff2: Long? = null
 )
-internal class HistoryStore(private val context: Context): SQLiteOpenHelper(context, "guelma_history.db", null, 1) {
+internal class HistoryStore(private val context: Context): SQLiteOpenHelper(context, "guelma_history.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE samples (device TEXT NOT NULL, time INTEGER NOT NULL, showers INTEGER, t1 REAL, t2 REAL, target REAL, power REAL, energy INTEGER, mode TEXT, boost TEXT, absence TEXT, heating TEXT, PRIMARY KEY(device,time))")
+        db.execSQL("CREATE TABLE samples (device TEXT NOT NULL, time INTEGER NOT NULL, showers INTEGER, t1 REAL, t2 REAL, target REAL, power REAL, energy INTEGER, mode TEXT, boost TEXT, absence TEXT, heating TEXT, tariff1 INTEGER, tariff2 INTEGER, PRIMARY KEY(device,time))")
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) { if (oldVersion < 2) { db.execSQL("ALTER TABLE samples ADD COLUMN tariff1 INTEGER"); db.execSQL("ALTER TABLE samples ADD COLUMN tariff2 INTEGER") } }
     private fun prune(db: SQLiteDatabase, now: Long) { db.delete("samples", "time < ?", arrayOf((now-90L*86400000).toString())) }
     fun record(devices: List<Device>): Boolean = synchronized(lock) {
         if (!HistorySettings.enabled(context)) return@synchronized false
@@ -92,6 +98,8 @@ internal class HistoryStore(private val context: Context): SQLiteOpenHelper(cont
             put("t1", t1); put("t2", t2); put("target", temp("core:TargetDHWTemperatureState"))
             put("power", number("modbuslink:PowerHeatElectricalState")?.takeIf { it >= 0 })
             put("energy", energy?.takeIf { it.available == true }?.state("core:ElectricEnergyConsumptionState")?.toLongOrNull()?.takeIf { it >= 0 })
+            put("tariff1", energy?.takeIf { it.available == true }?.state("core:ConsumptionTariff1State")?.toLongOrNull()?.takeIf { it >= 0 })
+            put("tariff2", energy?.takeIf { it.available == true }?.state("core:ConsumptionTariff2State")?.toLongOrNull()?.takeIf { it >= 0 })
             put("mode", heater.state("modbuslink:DHWModeState")); put("boost", heater.state("modbuslink:DHWBoostModeState"))
             put("absence", heater.state("modbuslink:DHWAbsenceModeState")); put("heating", heater.state("core:HeatingStatusState"))
         }
@@ -101,7 +109,7 @@ internal class HistoryStore(private val context: Context): SQLiteOpenHelper(cont
         if (key.isEmpty()) return@synchronized emptyList()
         val now = System.currentTimeMillis()
         prune(writableDatabase, now)
-        readableDatabase.rawQuery("SELECT time,showers,t1,t2,target,power,energy,mode,boost,absence,heating FROM samples WHERE device=? AND time>=? ORDER BY time",
+        readableDatabase.rawQuery("SELECT time,showers,t1,t2,target,power,energy,mode,boost,absence,heating,tariff1,tariff2 FROM samples WHERE device=? AND time>=? ORDER BY time",
             arrayOf(key,(now-days*86400000L).toString())).use { c ->
             buildList {
                 while (c.moveToNext()) {
@@ -109,7 +117,7 @@ internal class HistoryStore(private val context: Context): SQLiteOpenHelper(cont
                     fun double(i: Int) = if (c.isNull(i)) null else c.getDouble(i)
                     fun long(i: Int) = if (c.isNull(i)) null else c.getLong(i)
                     fun str(i: Int) = if (c.isNull(i)) null else c.getString(i)
-                    add(Sample(c.getLong(0),int(1),double(2),double(3),double(4),double(5),long(6),str(7),str(8),str(9),str(10)))
+                    add(Sample(c.getLong(0),int(1),double(2),double(3),double(4),double(5),long(6),str(7),str(8),str(9),str(10),long(11),long(12)))
                 }
             }
         }

@@ -36,7 +36,7 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
             Text("Analyse des habitudes", style = MaterialTheme.typography.titleLarge)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Observation automatique", Modifier.weight(1f))
-                Switch(checked = model.historyEnabled, onCheckedChange = model::setHistoryEnabled,
+                Switch(checked = model.historyEnabled, onCheckedChange = model::configureHistory,
                     enabled = model.remembered && heater.historyKey.isNotEmpty() && !model.busy)
             }
             if (!model.remembered) Text("La collecte en arrière-plan nécessite une connexion mémorisée.")
@@ -57,6 +57,7 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
             OutlinedButton(onClick = { clearDialog = true }) { Text("Effacer l’historique") }
         }
     }
+    CollectionLogPanel()
     if (clearDialog) AlertDialog(onDismissRequest = { clearDialog = false }, title = { Text("Effacer tous les relevés ?") },
         text = { Text("L’observation sera désactivée et les relevés locaux supprimés.") },
         confirmButton = { TextButton(onClick = { clearDialog = false; model.clearHistory(); rows = emptyList() }) { Text("Effacer") } },

@@ -186,7 +186,7 @@ internal fun diagnosticValue(value: Any?): String {
     return "masqué (texte ou structure)"
 }
 internal fun diagnosticReport(devices: List<Device>, demo: Boolean, summary: String = ""): String = buildString {
-    appendLine("Guelma Control 0.3.1 — " + if (demo) "DÉMO" else "diagnostic")
+    appendLine("Guelma Control 0.4.0 — " + if (demo) "DÉMO" else "diagnostic")
     if (!demo && summary.isNotBlank()) appendLine(summary)
     appendLine("Appareils détectés : " + devices.size)
     devices.forEachIndexed { index, device ->

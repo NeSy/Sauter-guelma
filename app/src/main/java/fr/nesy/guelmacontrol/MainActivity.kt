@@ -87,15 +87,15 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
             api.login(saved.first, saved.second)
         }
     }
-    fun forget() { if (!busy) { setHistoryEnabled(false); vault.clear(); remembered = false } }
-    fun setHistoryEnabled(enabled: Boolean) {
+    fun forget() { if (!busy) { configureHistory(false); vault.clear(); remembered = false } }
+    fun configureHistory(enabled: Boolean) {
         if (enabled && !vault.hasCredentials()) return
         HistorySettings.configure(historyContext, enabled)
         historyEnabled = enabled
-        if (enabled) viewModelScope.launch(Dispatchers.IO) { HistoryStore(historyContext).use { it.record(devices) } }
+        if (enabled) viewModelScope.launch(Dispatchers.IO) { loggedRecord(historyContext, devices, "Activation") }
     }
     fun clearHistory() {
-        setHistoryEnabled(false)
+        configureHistory(false)
         viewModelScope.launch(Dispatchers.IO) { HistoryStore(historyContext).use { it.clearAll() } }
     }
     fun refresh() {
@@ -111,7 +111,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
         busy = true; error = ""; demo = false
         viewModelScope.launch {
             try {
-                devices = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { action().also { rows -> runCatching { HistoryStore(historyContext).use { it.record(rows) } } } } }
+                devices = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { action().also { rows -> runCatching { loggedRecord(historyContext, rows, "Application") } } } }
                 summary = api.discoverySummary
                 if (devices.isNotEmpty()) lastSync = System.currentTimeMillis()
                 needsRefresh = false
@@ -134,7 +134,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
                     delay(wait)
                     val rows = withContext(Dispatchers.IO) {
                         CloudGate.mutex.withLock {
-                            api.readDevices().also { data -> runCatching { HistoryStore(historyContext).use { it.record(data) } } }
+                            api.readDevices().also { data -> runCatching { loggedRecord(historyContext, data, "Vérification commande") } }
                         }
                     }
                     devices = rows
@@ -174,7 +174,7 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Guelma Control", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Sauter Guelma 2 MP · 65 L · V0.3.1")
+            Text("Sauter Guelma 2 MP · 65 L · V0.4.0")
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Connexion Cozytouch", style = MaterialTheme.typography.titleLarge)
@@ -214,6 +214,7 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                     else Text("Connectez le chauffe-eau réel pour accéder à l’analyse.")
                 }
                 if (model.actionMessage.isNotBlank()) Text(model.actionMessage, color = MaterialTheme.colorScheme.primary)
+                if (tab == 2) CollectionLogPanel()
                 if (tab == 2) model.devices.forEachIndexed { index, device ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
