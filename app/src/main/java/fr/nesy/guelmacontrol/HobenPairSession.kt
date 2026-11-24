@@ -83,7 +83,7 @@ internal class HobenPairSession(context:Context):AutoCloseable {
             if(result==HobenPairResult.PinRequired)HobenPairResult.Failed("Nouvelle demande d’autorisation. Relancez la connexion.")else result
         }catch(e:Exception){failure(e)}finally{close()}
     }
-    private fun readReply(remember:Boolean,command:HobenOverride?=null):HobenPairResult {
+    private fun readReply(remember:Boolean,command:HobenOverride?=null,detailDay:Int?=null):HobenPairResult {
         val input=DataInputStream(socket!!.inputStream)
         return when(val header=input.readUnsignedByte()){
             47 -> HobenPairResult.PinRequired
