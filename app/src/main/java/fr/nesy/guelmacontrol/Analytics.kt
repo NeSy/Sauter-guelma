@@ -54,3 +54,30 @@ internal fun csv(rows:List<Sample>):String=buildString {
     appendLine("timestamp_utc,showers_estimated,temp1_c,temp2_c,target_c,power_raw,energy_raw,tariff1_raw,tariff2_raw,mode,boost,absence,heating")
     rows.forEach { r -> appendLine(listOf(Instant.ofEpochMilli(r.time),r.showers,r.t1,r.t2,r.target,r.power,r.energy,r.tariff1,r.tariff2,r.mode,r.boost,r.absence,r.heating).joinToString(","){it?.toString()?:""}) }
 }
+
+internal data class DemandWindow(val hour:Int,val days:Int,val demandDays:Int,val reserveLoss:Int)
+internal data class Forecast(val days:Int,val coverage:Double,val windows:List<DemandWindow>)
+internal fun demandForecast(rows:List<Sample>,weekend:Boolean,zone:ZoneId=ZoneId.systemDefault()):Forecast {
+    val pairs=intervals(rows)
+    val dayHours=mutableMapOf<Pair<java.time.LocalDate,Int>,Double>()
+    val losses=mutableMapOf<Pair<java.time.LocalDate,Int>,Int>()
+    for(i in pairs) {
+        val t=Instant.ofEpochMilli(i.a.time+(i.b.time-i.a.time)/2).atZone(zone)
+        val key=t.toLocalDate() to t.hour
+        dayHours[key]=(dayHours[key]?:0.0)+i.hours
+        if(i.draw) losses[key]=(losses[key]?:0)+(i.a.showers!!-i.b.showers!!)
+    }
+    val complete=dayHours.filterValues{it>=0.5}
+    val coveredDays=complete.keys.groupBy{it.first}.count{it.value.size>=18}
+    val dates=rows.map{Instant.ofEpochMilli(it.time).atZone(zone).toLocalDate()}.distinct()
+    val span=if(dates.isEmpty())0L else java.time.temporal.ChronoUnit.DAYS.between(dates.minOrNull()!!,dates.maxOrNull()!!)+1
+    val coverage=if(span>0)(complete.size/(span*24.0)).coerceIn(0.0,1.0) else 0.0
+    if(coveredDays<14||coverage<0.6)return Forecast(coveredDays,coverage,emptyList())
+    val windows=(0..23).mapNotNull{hour->
+        val days=complete.keys.filter{it.second==hour && (it.first.dayOfWeek.value>=6)==weekend}
+        val events=days.mapNotNull{losses[it]}.filter{it>0}
+        if(days.size<4||events.size<3||events.size*2<days.size)null
+        else DemandWindow(hour,days.size,events.size, (events.sorted()[events.size/2]).coerceIn(1,5))
+    }.sortedWith(compareByDescending<DemandWindow>{it.demandDays.toDouble()/it.days}.thenBy{it.hour})
+    return Forecast(coveredDays,coverage,windows.take(4))
+}

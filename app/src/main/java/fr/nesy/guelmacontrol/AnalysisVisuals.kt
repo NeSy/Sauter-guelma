@@ -115,6 +115,8 @@ internal fun AdvancedAnalysis(rows:List<Sample>,key:String) {
         }
     }
     val model=remember(rows){thermalModel(rows)}
+    var weekend by remember { mutableStateOf(false) }
+    val forecast=remember(rows,weekend){demandForecast(rows,weekend)}
     val map=remember(rows){weeklyMap(rows)}
     val energy=remember(rows){energyIntervals(rows)}
     val tariff=tariffs(c)
@@ -166,6 +168,17 @@ internal fun AdvancedAnalysis(rows:List<Sample>,key:String) {
             Text("Réchauffement : "+(model.heating?.let{String.format(java.util.Locale.FRANCE,"%.1f °C/h",it)}?:"en attente")+" ("+model.heatingCount+" intervalles candidats)")
             model.heating?.takeIf{it>0}?.let{Text(String.format(java.util.Locale.FRANCE,"Estimation indicative pour +10 °C aux sondes : %.0f min",600/it))}
             Text("Les températures aux sondes ne représentent pas exactement les 65 L. Ces médianes sont des approximations.")
+            Text("Prévision de demande",style=MaterialTheme.typography.titleLarge)
+            Text("Jours bien couverts : "+forecast.days+" · couverture horaire "+(forecast.coverage*100).roundToInt()+" %")
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                FilterChip(selected=!weekend,onClick={weekend=false},label={Text("Semaine")})
+                FilterChip(selected=weekend,onClick={weekend=true},label={Text("Week-end")})
+            }
+            if(forecast.windows.isEmpty()) Text("Pas encore de fenêtre suffisamment récurrente. Minimum : 14 jours bien couverts et 60 % de couverture sur la période. Essayez une période de 30 jours.")
+            forecast.windows.forEach{w->
+                Text(String.format(java.util.Locale.FRANCE,"%02dh–%02dh · soutirage probable %d jours sur %d observés",w.hour,(w.hour+1)%24,w.demandDays,w.days))
+                Text("Baisse médiane de réserve estimée : "+w.reserveLoss+" douche(s). Ce n’est pas une mesure du nombre de douches.",style=MaterialTheme.typography.bodySmall)
+            }
             Text("Optimisation automatique désactivée. Il faudra valider la couverture, la demande et les pertes avant tout pilotage prédictif.")
             Button(onClick={launcher.launch("guelma-historique.csv")},enabled=rows.isNotEmpty()){Text("Exporter les relevés CSV")}
             if(exportStatus.isNotBlank()) Text(exportStatus)

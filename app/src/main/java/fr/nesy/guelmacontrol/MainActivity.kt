@@ -111,7 +111,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
         busy = true; error = ""; demo = false
         viewModelScope.launch {
             try {
-                devices = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { action().also { rows -> runCatching { loggedRecord(historyContext, rows, "Application") } } } }
+                devices = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { loggedFetch(historyContext, "Application", action) } }
                 summary = api.discoverySummary
                 if (devices.isNotEmpty()) lastSync = System.currentTimeMillis()
                 needsRefresh = false
@@ -134,7 +134,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
                     delay(wait)
                     val rows = withContext(Dispatchers.IO) {
                         CloudGate.mutex.withLock {
-                            api.readDevices().also { data -> runCatching { loggedRecord(historyContext, data, "Vérification commande") } }
+                            loggedFetch(historyContext, "Vérification commande") { api.readDevices() }
                         }
                     }
                     devices = rows
@@ -174,7 +174,7 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Guelma Control", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Sauter Guelma 2 MP · 65 L · V0.4.0")
+            Text("Sauter Guelma 2 MP · 65 L · V0.4.1")
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Connexion Cozytouch", style = MaterialTheme.typography.titleLarge)

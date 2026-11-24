@@ -25,3 +25,6 @@ Onglets Pilotage, Analyse et Réglages. Thème clair/sombre selon Android. Actua
 
 ## V0.4.0 — analyse approfondie et confort
 Journal de collecte temporaire (arrière-plan et application), courbes de températures/réserve/puissance, carte hebdomadaire, cycles observés, tarifs saisis manuellement, index tarifaires historisés (migration SQLite non destructive), export CSV via le sélecteur Android, modèle thermique exploratoire et simulateur de décalage tarifaire. Le calcul en kWh est conditionné à la confirmation de l'unité Wh. Mode absence expérimental avec confirmation explicite et vérification des dates dans Cozytouch. Aucun ordre prédictif automatique. La collecte est désactivée par défaut. Les estimations ne constituent pas une mesure du débit ni des économies garanties.
+
+## V0.4.1 — qualité et journal
+Tentatives journalisées avant les appels réseau en premier plan, état WorkManager et prochaine date d'éligibilité (pas une garantie). Prévision exploratoire par jour et heure avec seuil minimal de 14 jours bien couverts et 60 % de couverture. Aucune automatisation de chauffe.
