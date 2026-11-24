@@ -75,7 +75,7 @@ internal class CozytouchApi {
         if (overkizCookie.isEmpty()) {
             val raw = request("/magellan/accounts/jwt", "Bearer " + access).trim()
             val jwt = if (raw.startsWith("{")) JSONObject(raw).optString("jwt") else raw.trim('"')
-            if (!Regex("^[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+\\\\.[A-Za-z0-9_-]+$").matches(jwt))
+            if (!Regex("^[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$").matches(jwt))
                 throw ApiException("JWT absent ou invalide")
             discoverySummary += "\nÉchange JWT : OK"
             val login = request("/login", "", "jwt=" + encode(jwt), overkiz = true, captureCookie = true)
