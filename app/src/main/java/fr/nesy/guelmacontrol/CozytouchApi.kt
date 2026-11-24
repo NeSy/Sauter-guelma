@@ -8,7 +8,7 @@ import java.net.URLEncoder
 import javax.net.ssl.HttpsURLConnection
 
 data class Capability(val id: Int, val value: String)
-data class Device(val model: Int, val product: Int, val available: Boolean?, val capabilities: List<Capability>, val protocol: String = "Magellan", val type: String = "", val states: List<Pair<String, String>> = emptyList(), val commands: List<String> = emptyList())
+data class Device(val model: Int, val product: Int, val available: Boolean?, val capabilities: List<Capability>, val protocol: String = "Magellan", val type: String = "", val states: List<Pair<String, String>> = emptyList(), val commands: List<String> = emptyList(), val historyKey: String = "")
 internal class ApiException(message: String): Exception(message)
 
 internal class CozytouchApi {
@@ -97,6 +97,7 @@ internal class CozytouchApi {
                 val type = safeTechnicalName(d.optString("controllableName", definition?.optString("uiClass").orEmpty()))
                 val states = d.optJSONArray("states") ?: JSONArray()
                 val commands = definition?.optJSONArray("commands") ?: JSONArray()
+                val url = d.optString("deviceURL")
                 val device = Device(-1, -1, if (d.has("available") && !d.isNull("available")) d.optBoolean("available") else null,
                     emptyList(), "Overkiz", type,
                     buildList {
@@ -111,9 +112,8 @@ internal class CozytouchApi {
                             val name = safeTechnicalName(commands.optJSONObject(j)?.optString("commandName").orEmpty())
                             if (name.isNotEmpty()) add(name)
                         }
-                    })
+                    }, if (url.startsWith("modbuslink://")) historyKey(url) else "")
                 add(device)
-                val url = d.optString("deviceURL")
                 if (device.type == HEATER_TYPE && url.startsWith("modbuslink://")) targets.add(url to device)
             }
         }
@@ -186,7 +186,7 @@ internal fun diagnosticValue(value: Any?): String {
     return "masqué (texte ou structure)"
 }
 internal fun diagnosticReport(devices: List<Device>, demo: Boolean, summary: String = ""): String = buildString {
-    appendLine("Guelma Control 0.2.1 — " + if (demo) "DÉMO" else "diagnostic")
+    appendLine("Guelma Control 0.3.0 — " + if (demo) "DÉMO" else "diagnostic")
     if (!demo && summary.isNotBlank()) appendLine(summary)
     appendLine("Appareils détectés : " + devices.size)
     devices.forEachIndexed { index, device ->
@@ -215,3 +215,6 @@ internal fun validCommand(device: Device, command: String, value: Any): Boolean 
         else -> false
     }
 }
+
+internal fun historyKey(url: String): String = java.security.MessageDigest.getInstance("SHA-256")
+    .digest(url.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it.toInt() and 255) }

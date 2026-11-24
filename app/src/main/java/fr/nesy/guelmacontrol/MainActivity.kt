@@ -23,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withLock
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +36,8 @@ class MainActivity : ComponentActivity() {
 class DiagnosticModel(application: Application) : AndroidViewModel(application) {
     private val vault = CredentialVault(application)
     private val api = CozytouchApi()
+    private val historyContext = application
+    var historyEnabled by mutableStateOf(HistorySettings.enabled(application)); private set
     var devices by mutableStateOf<List<Device>>(emptyList()); private set
     var actionMessage by mutableStateOf(""); private set
     var needsRefresh by mutableStateOf(false); private set
@@ -53,7 +57,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
             if (rememberConnection) {
                 try { vault.save(email.trim(), password) }
                 catch (_: Exception) { vault.clear() }
-            } else vault.clear()
+            } else { HistorySettings.configure(historyContext, false); vault.clear() }
             result
         }
     }
@@ -64,7 +68,17 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
             api.login(saved.first, saved.second)
         }
     }
-    fun forget() { if (!busy) { vault.clear(); remembered = false } }
+    fun forget() { if (!busy) { setHistoryEnabled(false); vault.clear(); remembered = false } }
+    fun setHistoryEnabled(enabled: Boolean) {
+        if (enabled && !vault.hasCredentials()) return
+        HistorySettings.configure(historyContext, enabled)
+        historyEnabled = enabled
+        if (enabled) viewModelScope.launch(Dispatchers.IO) { HistoryStore(historyContext).use { it.record(devices) } }
+    }
+    fun clearHistory() {
+        setHistoryEnabled(false)
+        viewModelScope.launch(Dispatchers.IO) { HistoryStore(historyContext).use { it.clearAll() } }
+    }
     fun refresh() {
         if (connected && !demo) runRequest {
             if (api.sessionExpired() && vault.hasCredentials()) {
@@ -78,7 +92,7 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
         busy = true; error = ""; demo = false
         viewModelScope.launch {
             try {
-                devices = withContext(Dispatchers.IO) { action() }
+                devices = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { action().also { rows -> runCatching { HistoryStore(historyContext).use { it.record(rows) } } } } }
                 summary = api.discoverySummary
                 needsRefresh = false
                 connected = true
@@ -86,14 +100,14 @@ class DiagnosticModel(application: Application) : AndroidViewModel(application) 
             catch (e: Exception) {
                 api.logout(); connected = false; devices = emptyList()
                 error = if (e is ApiException) e.message.orEmpty() else "Connexion impossible ou réponse inattendue. Vérifiez votre réseau."
-            } finally { remembered = vault.hasCredentials(); busy = false }
+            } finally { remembered = vault.hasCredentials(); historyEnabled = HistorySettings.enabled(historyContext); busy = false }
         }
     }
     fun send(command: String, value: Any) {
         if (busy || demo || !connected || needsRefresh) return
         busy = true; needsRefresh = true; actionMessage = ""
         viewModelScope.launch {
-            try { actionMessage = withContext(Dispatchers.IO) { api.send(command, value) } }
+            try { actionMessage = withContext(Dispatchers.IO) { CloudGate.mutex.withLock { api.send(command, value) } } }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { actionMessage = (if (e is ApiException) e.message.orEmpty() else "Résultat de l’ordre inconnu.") + " Actualisez avant de réessayer." }
             finally { busy = false }
@@ -119,7 +133,7 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
     Scaffold { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Guelma Control", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Sauter Guelma 2 MP · 65 L · V0.2.1")
+            Text("Sauter Guelma 2 MP · 65 L · V0.3.0")
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (model.demo) "DÉMONSTRATION" else if (model.connected) "Session Cozytouch active" else "Connexion Cozytouch", style = MaterialTheme.typography.titleLarge)
@@ -145,7 +159,10 @@ fun DiagnosticScreen(model: DiagnosticModel = viewModel()) {
                 if (!model.demo && model.summary.isNotBlank()) Text(model.summary, style = MaterialTheme.typography.bodySmall)
                 if (model.devices.isEmpty()) Text("Aucun appareil détecté. Copiez le diagnostic pour examiner les étapes de connexion.")
                 val heater = model.devices.singleOrNull { it.type == HEATER_TYPE }
-                if (heater != null) HeaterDashboard(heater, model)
+                if (heater != null) {
+                    HeaterDashboard(heater, model)
+                    if (!model.demo) HistoryPanel(heater, model)
+                }
                 if (model.actionMessage.isNotBlank()) Text(model.actionMessage, color = MaterialTheme.colorScheme.primary)
                 OutlinedButton(onClick = { showDetails = !showDetails }, modifier = Modifier.fillMaxWidth()) { Text(if (showDetails) "Masquer le diagnostic" else "Afficher le diagnostic") }
                 if (showDetails) model.devices.forEachIndexed { index, device ->
