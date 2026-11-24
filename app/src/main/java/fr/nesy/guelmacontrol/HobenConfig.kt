@@ -65,7 +65,7 @@ internal fun readHobenDetails(s:SSLSocket,i:DataInputStream,day:Int):HobenDetail
     require(day in 0..6)
     return HobenDetails(day,regs(s,i,1536,7,101),regs(s,i,3072+21*day,21,102),regs(s,i,2560,35,103))
 }
-internal fun readHobenWeek(s:SSLSocket,i:DataInputStream):List<List<Int>>=(0..6).map{day->regs(s,i,3072+21*day,21,120+day)}
+internal fun readHobenWeek(s:SSLSocket,i:DataInputStream):List<List<Int>> = (0..6).map{day->regs(s,i,3072+21*day,21,120+day)}
 internal fun applyHobenConfig(s:SSLSocket,i:DataInputStream,before:HobenSnapshot,order:HobenOverride):HobenOverrideOutcome{
     fun blocked(t:String)=HobenOverrideOutcome(before,t+" Aucun ordre envoyé.")
     if(before.faults!=0||before.mode !in listOf(0,2)||before.activeOverride||before.scheduledOverride||before.info and (4 or 128 or 2048)!=0)return blocked("État incompatible avec la configuration.")

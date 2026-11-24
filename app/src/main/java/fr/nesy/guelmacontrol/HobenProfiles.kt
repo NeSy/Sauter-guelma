@@ -101,7 +101,7 @@ internal object HobenProfileStore{
                     val opened=r as? HobenPairResult.Opened
                     val week=opened?.week
                     val k=HobenProfileStore.key(c)
-                    if(week==null||k==null||k!=expectedKey||opened.state?.deviceKey!=k)throw IllegalStateException("Lecture incomplète ou poêle différent")
+                    if(week==null||k==null||k!=expectedKey||opened?.state?.deviceKey!=k)throw IllegalStateException("Lecture incomplète ou poêle différent")
                     val next=HobenProfileStore.load(c,k)+HobenProfile(UUID.randomUUID().toString(),label,week)
                     HobenProfileStore.save(c,k,next);next
                 }
