@@ -61,6 +61,7 @@ internal fun HistoryPanel(heater: Device, model: DiagnosticModel) {
             OutlinedButton(onClick = { clearDialog = true }) { Text("Effacer l’historique") }
         }
     }
+    PredictivePanel(heater, model.lastSync, model.historyEnabled)
     AdvancedAnalysis(rows, heater.historyKey)
     CollectionLogPanel()
     if (clearDialog) AlertDialog(onDismissRequest = { clearDialog = false }, title = { Text("Effacer tous les relevés ?") },
