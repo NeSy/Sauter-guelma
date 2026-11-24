@@ -2,10 +2,15 @@
 
 Application Android indépendante pour le Sauter Guelma 2 MP 65 L Wi-Fi.
 
-Version 0.1 : diagnostic en lecture seule. Connexion expérimentale au cloud Cozytouch Magellan. Compatibilité à vérifier sur le matériel réel. Aucun ordre de chauffe envoyé.
+## V0.1 — diagnostic
+- Connexion expérimentale au cloud Cozytouch Magellan et lecture des appareils/capacités.
+- Aucun ordre de chauffe ; aucune modification de la configuration.
+- Mode démo clairement identifié, sans connexion réseau.
+- Rapport copiable limité aux identifiants de modèles et capacités, valeurs numériques/booléennes et métadonnées techniques. Vérifiez-le avant de le partager.
+- Identifiants et jeton uniquement en mémoire, pas de télémétrie, pas de journalisation des réponses brutes. Le mot de passe est effacé du formulaire lors de la connexion.
+- L'API est non officielle ; la compatibilité Guelma 2 MP reste à valider. Référence : https://github.com/gduteil/cozytouch. L'identifiant de client de cette intégration est renseigné dans le code ; il ne s'agit pas de vos identifiants personnels.
 
-Les identifiants du compte restent en mémoire sur le téléphone pendant la session. Ne publiez jamais vos identifiants ou réponses API brutes.
+## Compiler et installer
+JDK 17, SDK Android 35, Gradle 8.9. Exécuter `gradle :app:assembleDebug` ou utiliser Actions > Android APK > Run workflow. Télécharger l'artifact Guelma-Control-debug, décompresser puis ouvrir l'APK. Les builds debug ne sont pas destinés à la distribution publique. La signature debug peut changer entre compilations ; désinstaller l'ancienne version si Android refuse la mise à jour.
 
-Référence du protocole : https://github.com/gduteil/cozytouch (API non officielle).
-
-Compilation : JDK 17, Android SDK 35, Gradle 8.9. `gradle :app:assembleDebug`. Le workflow Android doit produire un APK de test dans Actions > Artifacts.
+Android 8.0 minimum. La V0.1 ne programme pas la chauffe. En cas d'erreur, utiliser Cozytouch et ne pas multiplier les tentatives.
