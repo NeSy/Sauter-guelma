@@ -29,7 +29,7 @@ internal fun HouseOverview(model:DiagnosticModel,heater:Device?,openWater:()->Un
     val saved=CredentialVault(c,"hoben").hasCredentials()
     val h=heater?.takeIf{model.connected&&it.available==true}
     Text("Ma maison",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-    Text("2 équipements · accès indépendant",color=MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("Eau chaude · chauffage · cuisine",color=MaterialTheme.colorScheme.onSurfaceVariant)
     Card(onClick=openWater,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(24.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFF143751))){
         Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
             Text("EAU CHAUDE",color=Color(0xFF7DDCFF),style=MaterialTheme.typography.labelLarge)
@@ -65,6 +65,7 @@ internal fun HouseOverview(model:DiagnosticModel,heater:Device?,openWater:()->Un
         if(model.connected&&!model.demo)model.refresh() else if(model.remembered&&!model.demo)model.reconnect()
         if(saved&&!model.demo){refreshing=true;scope.launch{try{withContext(Dispatchers.IO){HobenObservation.collect(c.applicationContext,"Hoben · accueil")}}finally{refreshing=false}}}
     },enabled=!model.busy&&!refreshing&&!model.demo&&(saved||model.remembered||model.connected),modifier=Modifier.fillMaxWidth()){Text(if(refreshing)"Actualisation…"else "Actualiser les appareils")}
+    HomeConnectOverview()
     HouseWeatherPanel()
     Text("Les cartes affichent les derniers relevés, pas un état garanti en temps réel.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
 }
