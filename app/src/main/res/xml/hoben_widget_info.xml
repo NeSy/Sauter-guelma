@@ -1,3 +1,5 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="110dp" android:minHeight="90dp" android:targetCellWidth="2" android:targetCellHeight="2"
-    android:initialLayout="@layout/hoben_widget" android:resizeMode="horizontal|vertical" android:updatePeriodMillis="0" android:widgetCategory="home_screen"/>
+    android:minWidth="40dp" android:minHeight="40dp" android:targetCellWidth="1" android:targetCellHeight="1"
+    android:initialLayout="@layout/hoben_widget" android:resizeMode="none" android:updatePeriodMillis="0"
+    android:configure="fr.nesy.guelmacontrol.HobenWidgetConfigActivity" android:widgetFeatures="reconfigurable|configuration_optional"
+    android:widgetCategory="home_screen"/>

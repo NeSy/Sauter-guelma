@@ -37,3 +37,6 @@ Nouvelle navigation fixe Accueil / Planning / Analyse / Réglages, tableau de bo
 
 ## V0.7.0 — préparation Hoben H5
 Espace indépendant Hoben, favoris locaux nommés (température, durée), sélection du favori du widget Android. Le widget ouvre le détail, il n’envoie aucune commande. Diagnostic de transport TLS avec validation du certificat et du nom d’hôte, sans identifiant ni message applicatif. La connexion au poêle et les commandes restent verrouillées tant que le protocole et l’autorisation ne sont pas vérifiés. Aucun APK tiers ni secret inclus dans le dépôt.
+
+## V0.7.1 — widgets 1×1
+Widget compact 1×1, température et durée uniquement, association indépendante de chaque instance à un favori, configuration/réglage depuis les lanceurs compatibles. Aucun ordre réseau depuis le widget. Les favoris existants restent conservés. Analyse APK MyHOBEN 2.2 : présence confirmée d'une branche TLS distante et d'une phase d'identification distincte ; aucun message applicatif Hoben n'est encore envoyé, tant que le format d'ouverture et l'autorisation de lecture ne sont pas validés.

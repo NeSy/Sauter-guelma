@@ -36,6 +36,8 @@ import javax.net.ssl.SSLSocketFactory
 import kotlin.math.roundToInt
 
 internal data class HobenFavorite(val id:String,val name:String,val halfDegrees:Int,val minutes:Int){
+    val compactTemperature:String get()=if(halfDegrees%2==0)"${halfDegrees/2}°" else String.format(java.util.Locale.FRANCE,"%.1f°",halfDegrees/2.0)
+    val compactDuration:String get()=if(minutes<60)"${minutes}m" else if(minutes%60==0)"${minutes/60}h" else "${minutes/60}h${(minutes%60).toString().padStart(2,'0')}"
     val temperature:String get()=String.format(java.util.Locale.FRANCE,"%.1f °C",halfDegrees/2.0)
     val duration:String get()=if(minutes<60)"$minutes min"else if(minutes%60==0)"${minutes/60} h"else "${minutes/60} h ${minutes%60} min"
 }
@@ -61,6 +63,12 @@ internal object HobenFavorites{
     fun selected(c:Context)=prefs(c).getString("selected","default")
     fun select(c:Context,id:String){prefs(c).edit().putString("selected",id).apply();HobenWidget.refresh(c)}
     fun primary(c:Context):HobenFavorite?=load(c).let{rows->rows.firstOrNull{it.id==selected(c)}?:rows.firstOrNull()}
+    fun bind(c:Context,widgetId:Int,favoriteId:String){prefs(c).edit().putString("widget_$widgetId",favoriteId).apply()}
+    fun unbind(c:Context,widgetId:Int){prefs(c).edit().remove("widget_$widgetId").apply()}
+    fun forWidget(c:Context,widgetId:Int):HobenFavorite? {
+        val id=prefs(c).getString("widget_$widgetId",null) ?: return primary(c)
+        return load(c).firstOrNull{it.id==id}
+    }
 }
 internal object HobenTransport{
     // Transport only. No authentication, Modbus frame or control command is sent.
@@ -86,13 +94,14 @@ internal object HobenTransport{
 }
 class HobenWidget:AppWidgetProvider(){
     override fun onUpdate(context:Context,manager:AppWidgetManager,ids:IntArray){ids.forEach{render(context,manager,it)}}
+    override fun onDeleted(context:Context,appWidgetIds:IntArray){appWidgetIds.forEach{HobenFavorites.unbind(context,it)}}
     companion object{
-        private fun render(c:Context,m:AppWidgetManager,id:Int){
-            val f=HobenFavorites.primary(c)
+        internal fun render(c:Context,m:AppWidgetManager,id:Int){
+            val f=HobenFavorites.forWidget(c,id)
             val views=RemoteViews(c.packageName,R.layout.hoben_widget)
-            views.setTextViewText(R.id.hoben_widget_value,f?.temperature?:"Mes favoris")
-            views.setTextViewText(R.id.hoben_widget_duration,f?.duration?:"Aucun favori")
-            val intent=Intent(c,HobenActivity::class.java).putExtra("favorite",f?.id)
+            views.setTextViewText(R.id.hoben_widget_value,f?.compactTemperature?:"—")
+            views.setTextViewText(R.id.hoben_widget_duration,f?.compactDuration?:"Choisir")
+            val intent=if(f!=null) Intent(c,HobenActivity::class.java).putExtra("favorite",f.id) else Intent(c,HobenWidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id)
             val pending=PendingIntent.getActivity(c,id,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             views.setOnClickPendingIntent(R.id.hoben_widget_root,pending)
             m.updateAppWidget(id,views)
@@ -155,8 +164,8 @@ private fun HobenView(initial:String?,back:()->Unit){
             if(list.isEmpty())Text("Ajoutez votre première dérogation favorite.")
             Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    Text("Widget Android",style=MaterialTheme.typography.titleMedium)
-                    Text("Depuis l’écran d’accueil Android : Widgets → Guelma Control. Le widget ouvre le favori sélectionné, sans piloter le poêle.")
+                    Text("Widgets Android · 1 × 1",style=MaterialTheme.typography.titleMedium)
+                    Text("Ajoutez plusieurs widgets depuis le sélecteur Android, puis choisissez un favori par widget. Un appui ouvre le favori ; le pilotage reste verrouillé. Le favori étoilé est le choix par défaut.")
                     val manager=AppWidgetManager.getInstance(c)
                     Button(onClick={manager.requestPinAppWidget(ComponentName(c,HobenWidget::class.java),null,null)},enabled=manager.isRequestPinAppWidgetSupported&&list.isNotEmpty()){Text("Ajouter le widget")}
                 }
@@ -177,7 +186,7 @@ private fun HobenView(initial:String?,back:()->Unit){
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text(f.temperature+" · "+f.duration,style=MaterialTheme.typography.headlineSmall)
                 Text("Activation verrouillée : la communication avec le H5 n’est pas encore validée.")
-                OutlinedButton(onClick={HobenFavorites.select(c,f.id);selected=f.id;details=null}){Text("Choisir pour le widget")}
+                OutlinedButton(onClick={HobenFavorites.select(c,f.id);selected=f.id;details=null}){Text("Choisir par défaut")}
                 TextButton(onClick={details=null;editing=f}){Text("Modifier")}
                 TextButton(onClick={details=null;remove=f}){Text("Supprimer")}
             }

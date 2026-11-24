@@ -1,8 +1,9 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/hoben_widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:gravity="center" android:padding="10dp" android:background="#38271E">
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HOBEN H5" android:textColor="#FFBE87" android:textSize="12sp"/>
-    <TextView android:id="@+id/hoben_widget_value" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="22 °C" android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="25sp"/>
-    <TextView android:id="@+id/hoben_widget_duration" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="2 h" android:textColor="#FFFFFF" android:textSize="15sp"/>
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ouvrir le favori" android:textColor="#FFBE87" android:textSize="11sp"/>
+    android:orientation="vertical" android:gravity="center" android:padding="3dp" android:background="@drawable/hoben_widget_background"
+    android:contentDescription="Favori Hoben, ouvrir le détail">
+    <TextView android:id="@+id/hoben_widget_value" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center" android:includeFontPadding="false" android:maxLines="1" android:text="22°" android:textColor="#FFF1E5" android:textStyle="bold" android:textSize="19sp"/>
+    <TextView android:id="@+id/hoben_widget_duration" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center" android:includeFontPadding="false" android:maxLines="1" android:text="2h" android:textColor="#FFC28C" android:textSize="12sp"/>
 </LinearLayout>
