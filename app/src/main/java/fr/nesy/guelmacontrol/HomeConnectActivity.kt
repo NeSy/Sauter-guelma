@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.ViewModelProvider
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -81,10 +82,11 @@ class HomeConnectActivity:ComponentActivity(){
     override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
         val selected=intent.getStringExtra("appliance")
-        setContent{GuelmaTheme{HomeConnectView(selected){finish()}}}
+        val model=ViewModelProvider(this)[HcAuthorizationModel::class.java]
+        setContent{GuelmaTheme{HomeConnectView(selected,model){finish()}}}
     }
 }
-@Composable private fun HomeConnectView(initial:String?,back:()->Unit){
+@Composable private fun HomeConnectView(initial:String?,auth:HcAuthorizationModel,back:()->Unit){
     val c=LocalContext.current
     val app=c.applicationContext
     val scope=rememberCoroutineScope()
@@ -92,38 +94,16 @@ class HomeConnectActivity:ComponentActivity(){
     val list by HomeConnect.appliances.collectAsState()
     val status by HomeConnect.status.collectAsState()
     val reading by HomeConnect.busy.collectAsState()
-    var saved by remember{mutableStateOf(HomeConnect.saved(app))}
-    var client by remember{mutableStateOf("")}
-    var secret by remember{mutableStateOf("")}
-    var grant by remember{mutableStateOf<HcDeviceGrant?>(null)}
-    var pending by remember{mutableStateOf(false)}
-    var message by remember{mutableStateOf("")}
+    val saved=auth.saved
+    val client=auth.client
+    val secret=auth.secret
+    val grant=auth.grant
+    val pending=auth.pending
+    val message=auth.message
     var selected by remember{mutableStateOf(initial)}
     var account by remember{mutableStateOf(!saved)}
     var confirmForget by remember{mutableStateOf(false)}
-    LaunchedEffect(saved){if(saved)withContext(Dispatchers.IO){HomeConnect.refresh(app)}}
-    LaunchedEffect(grant){
-        val g=grant?:return@LaunchedEffect
-        val id=client;val s=secret
-        var interval=g.interval
-        message="Autorisez l’accès dans le navigateur."
-        while(android.os.SystemClock.elapsedRealtime()<g.expiresAt){
-            delay(interval*1000L)
-            if(android.os.SystemClock.elapsedRealtime()>=g.expiresAt)break
-            try{
-                withContext(Dispatchers.IO){HomeConnect.poll(app,g,id,s)}
-                saved=true;client="";secret="";grant=null;account=false;message="Autorisation réussie."
-                withContext(Dispatchers.IO){HomeConnect.refresh(app,true)}
-                return@LaunchedEffect
-            }catch(e:kotlinx.coroutines.CancellationException){throw e}
-            catch(e:HcException){
-                if(e.reason=="authorization_pending")continue
-                if(e.reason=="slow_down"||e.code==429){interval=maxOf(interval+5,e.retrySeconds.toInt().coerceAtMost(120));continue}
-                message=hcError(e);grant=null;return@LaunchedEffect
-            }catch(_:Exception){message="Connexion interrompue. Recommencez l’autorisation.";grant=null;return@LaunchedEffect}
-        }
-        message="Code expiré. Recommencez l’autorisation.";grant=null
-    }
+    LaunchedEffect(saved){if(saved){account=false;withContext(Dispatchers.IO){HomeConnect.refresh(app)}}else account=true}
     Scaffold{padding->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
             TextButton(onClick=back){Text("‹  Ma maison")}
@@ -150,20 +130,21 @@ class HomeConnectActivity:ComponentActivity(){
                         Text("Enregistrez une application personnelle dans le portail développeur. Choisissez OAuth Device Flow.")
                         TextButton(onClick={c.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://developer.home-connect.com/")))}){Text("Ouvrir le portail développeur")}
                         if(grant==null){
-                            OutlinedTextField(client,{client=it.trim().take(64)},label={Text("Client ID")},singleLine=true,enabled=!pending,modifier=Modifier.fillMaxWidth())
-                            OutlinedTextField(secret,{secret=it.trim().take(256)},label={Text("Client Secret (si fourni)")},singleLine=true,visualTransformation=PasswordVisualTransformation(),enabled=!pending,modifier=Modifier.fillMaxWidth())
-                            Button(onClick={pending=true;val id=client;scope.launch{try{grant=withContext(Dispatchers.IO){HomeConnect.begin(id)}}catch(e:HcException){message=hcError(e)}catch(_:Exception){message="Demande d’autorisation impossible."}finally{pending=false}}},enabled=!pending&&hcClientValid(client)){Text("Connecter Home Connect")}
+                            OutlinedTextField(client,{auth.client=it.trim().take(64)},label={Text("Client ID")},singleLine=true,enabled=!pending,modifier=Modifier.fillMaxWidth())
+                            OutlinedTextField(secret,{auth.secret=it.trim().take(256)},label={Text("Client Secret (si fourni)")},singleLine=true,visualTransformation=PasswordVisualTransformation(),enabled=!pending,modifier=Modifier.fillMaxWidth())
+                            Button(onClick={auth.begin()},enabled=!pending&&hcClientValid(client)){Text("Connecter Home Connect")}
                         }else{
-                            val g=grant!!
+                            val g=grant
                             Text("Code à saisir dans le navigateur",style=MaterialTheme.typography.titleMedium)
                             Text(g.userCode,style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-                            Button(onClick={clip.setText(AnnotatedString(g.userCode));c.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(g.uri)))}){Text("Copier le code et autoriser")}
-                            Text("Revenez ici après avoir accepté les permissions.")
+                            Button(onClick={clip.setText(AnnotatedString(g.userCode));c.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(g.completeUri?:g.uri)))}){Text("Ouvrir Home Connect et autoriser")}
+                            Text("Revenez ici après avoir accepté les permissions. La récupération du jeton continue sans nouvelle demande de code.")
                             LinearProgressIndicator(Modifier.fillMaxWidth())
-                            TextButton(onClick={grant=null;message="Autorisation annulée."}){Text("Annuler")}
+                            TextButton(onClick={auth.cancel()},enabled=!auth.exchangeInFlight){Text("Annuler")}
                         }
                         if(pending)LinearProgressIndicator(Modifier.fillMaxWidth())
                         if(message.isNotBlank())Text(message)
+                        if(auth.diagnostic.isNotBlank())Text(auth.diagnostic,style=MaterialTheme.typography.bodySmall)
                         if(saved)TextButton(onClick={confirmForget=true},enabled=!pending&&grant==null&&!reading){Text("Supprimer la connexion locale")}
                         Text("Les jetons et identifiants client sont chiffrés sur ce téléphone. Le mot de passe Home Connect est saisi uniquement dans le navigateur officiel.",style=MaterialTheme.typography.bodySmall)
                     }
@@ -172,7 +153,7 @@ class HomeConnectActivity:ComponentActivity(){
             Text("Le pilotage des appareils sera ajouté après validation de leurs capacités réelles. Aucun ordre de cuisson n’est envoyé.",style=MaterialTheme.typography.bodySmall)
         }
     }
-    if(confirmForget)AlertDialog(onDismissRequest={confirmForget=false},title={Text("Déconnecter Home Connect ?")},text={Text("Supprime les jetons locaux. Les appareils restent associés à Home Connect.")},confirmButton={TextButton(onClick={confirmForget=false;if(HomeConnect.forget(app)){saved=false;account=true;selected=null}}){Text("Déconnecter")}},dismissButton={TextButton(onClick={confirmForget=false}){Text("Annuler")}})
+    if(confirmForget)AlertDialog(onDismissRequest={confirmForget=false},title={Text("Déconnecter Home Connect ?")},text={Text("Supprime les jetons locaux. Les appareils restent associés à Home Connect.")},confirmButton={TextButton(onClick={confirmForget=false;if(auth.forget()){account=true;selected=null}}){Text("Déconnecter")}},dismissButton={TextButton(onClick={confirmForget=false}){Text("Annuler")}})
 }
 @Composable private fun HcDetails(a:HcAppliance){
     Card(Modifier.fillMaxWidth()){

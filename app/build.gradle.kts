@@ -10,8 +10,8 @@ android {
         applicationId = "fr.nesy.guelmacontrol"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "0.9.0"
+        versionCode = 25
+        versionName = "0.9.1"
     }
     val signingPath = System.getenv("GUELMA_KEYSTORE")
     if (signingPath != null) {
